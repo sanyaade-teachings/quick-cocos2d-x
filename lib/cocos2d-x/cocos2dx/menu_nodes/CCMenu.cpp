@@ -122,9 +122,9 @@ bool CCMenu::initWithArray(CCArray* pArrayOfItems)
 {
     if (CCLayer::init())
     {
-        setTouchPriority(kCCMenuHandlerPriority);
         setTouchMode(kCCTouchesOneByOne);
         setTouchEnabled(true);
+        setTouchSwallowEnabled(false);
 
         m_bEnabled = true;
         // menu in the center of the screen
@@ -211,23 +211,12 @@ void CCMenu::removeChild(CCNode* child, bool cleanup)
 
 //Menu - Events
 
-void CCMenu::setHandlerPriority(int newPriority)
-{
-    CCTouchDispatcher* pDispatcher = CCDirector::sharedDirector()->getTouchDispatcher();
-    pDispatcher->setPriority(newPriority, this);
-}
-
-void CCMenu::registerWithTouchDispatcher()
-{
-    CCDirector* pDirector = CCDirector::sharedDirector();
-    pDirector->getTouchDispatcher()->addTargetedDelegate(this, this->getTouchPriority(), true);
-}
-
 bool CCMenu::ccTouchBegan(CCTouch* touch, CCEvent* event)
 {
     CC_UNUSED_PARAM(event);
     if (m_eState != kCCMenuStateWaiting || ! m_bVisible || !m_bEnabled)
     {
+        setTouchSwallowEnabled(false);
         return false;
     }
 
@@ -235,6 +224,7 @@ bool CCMenu::ccTouchBegan(CCTouch* touch, CCEvent* event)
     {
         if (c->isVisible() == false)
         {
+            setTouchSwallowEnabled(false);
             return false;
         }
     }
@@ -244,9 +234,30 @@ bool CCMenu::ccTouchBegan(CCTouch* touch, CCEvent* event)
     {
         m_eState = kCCMenuStateTrackingTouch;
         m_pSelectedItem->selected();
+        setTouchSwallowEnabled(true);
         return true;
     }
+    setTouchSwallowEnabled(false);
     return false;
+}
+
+void CCMenu::ccTouchMoved(CCTouch* touch, CCEvent* event)
+{
+    CC_UNUSED_PARAM(event);
+    CCAssert(m_eState == kCCMenuStateTrackingTouch, "[Menu ccTouchMoved] -- invalid state");
+    CCMenuItem *currentItem = this->itemForTouch(touch);
+    if (currentItem != m_pSelectedItem)
+    {
+        if (m_pSelectedItem)
+        {
+            m_pSelectedItem->unselected();
+        }
+        m_pSelectedItem = currentItem;
+        if (m_pSelectedItem)
+        {
+            m_pSelectedItem->selected();
+        }
+    }
 }
 
 void CCMenu::ccTouchEnded(CCTouch *touch, CCEvent* event)
@@ -272,25 +283,6 @@ void CCMenu::ccTouchCancelled(CCTouch *touch, CCEvent* event)
         m_pSelectedItem->unselected();
     }
     m_eState = kCCMenuStateWaiting;
-}
-
-void CCMenu::ccTouchMoved(CCTouch* touch, CCEvent* event)
-{
-    CC_UNUSED_PARAM(event);
-    CCAssert(m_eState == kCCMenuStateTrackingTouch, "[Menu ccTouchMoved] -- invalid state");
-    CCMenuItem *currentItem = this->itemForTouch(touch);
-    if (currentItem != m_pSelectedItem) 
-    {
-        if (m_pSelectedItem)
-        {
-            m_pSelectedItem->unselected();
-        }
-        m_pSelectedItem = currentItem;
-        if (m_pSelectedItem)
-        {
-            m_pSelectedItem->selected();
-        }
-    }
 }
 
 //Menu - Alignment

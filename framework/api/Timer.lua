@@ -1,5 +1,7 @@
 
-local scheduler = require(__FRAMEWORK_PACKAGE_NAME__ .. ".scheduler")
+local scheduler = require(cc.PACKAGE_NAME .. ".scheduler")
+
+PRINT_DEPRECATED("module api.Timer is deprecated, please use cc.utils.Timer")
 
 --[[--
 
@@ -19,7 +21,7 @@ local Timer = {}
 ]]
 function Timer.new()
     local timer = {}
-    require(__FRAMEWORK_PACKAGE_NAME__ .. ".api.EventProtocol").extend(timer)
+    require(cc.PACKAGE_NAME .. ".api.EventProtocol").extend(timer)
 
     ----
 

@@ -35,7 +35,7 @@ THE SOFTWARE.
  *
  *  Subclass CCMenuItem (or any subclass) to create your custom CCMenuItem objects.
  */
-class CCMenuItem : public CCNodeRGBA
+class CCMenuItem : public CCNode
 {
     /** Creates a CCMenuItem with no target/selector */
     static CCMenuItem* create();
@@ -49,10 +49,6 @@ class CCMenuItem : public CCNodeRGBA
     void selected();
     /** The item was unselected */
     void unselected();
-
-    /** Register menu handler script function */
-    void registerScriptTapHandler(LUA_FUNCTION nHandler);
-    void unregisterScriptTapHandler(void);
 
     bool isEnabled();
     void setEnabled(bool value);

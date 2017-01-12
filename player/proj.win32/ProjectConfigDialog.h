@@ -6,7 +6,7 @@
 #include "CCStdC.h"
 
 #include <string>
-#include "SimulatorConfig.h"
+#include "ProjectConfig/SimulatorConfig.h"
 
 class ProjectConfigDialog
 {

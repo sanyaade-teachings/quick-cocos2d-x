@@ -64,7 +64,7 @@ bool CCLabelAtlas::initWithString(const char *string, const char *charMapFile, u
 bool CCLabelAtlas::initWithString(const char *string, CCTexture2D* texture, unsigned int itemWidth, unsigned int itemHeight, unsigned int startCharMap)
 {
     CCAssert(string != NULL, "");
-    if (CCAtlasNode::initWithTexture(texture, itemWidth, itemHeight, strlen(string)))
+    if (CCAtlasNode::initWithTexture(texture, itemWidth, itemHeight, (unsigned int)strlen(string)))
     {
         m_uMapStartChar = startCharMap;
         this->setString(string);
@@ -114,7 +114,7 @@ bool CCLabelAtlas::initWithString(const char *theString, const char *fntFile)
 //CCLabelAtlas - Atlas generation
 void CCLabelAtlas::updateAtlasValues()
 {
-    unsigned int n = m_sString.length();
+    unsigned int n = (unsigned int)m_sString.length();
 
     const unsigned char *s = (unsigned char*)m_sString.c_str();
 
@@ -171,7 +171,7 @@ void CCLabelAtlas::updateAtlasValues()
         quads[i].tr.vertices.x = (float)(i * m_uItemWidth + m_uItemWidth);
         quads[i].tr.vertices.y = (float)(m_uItemHeight);
         quads[i].tr.vertices.z = 0.0f;
-        ccColor4B c = { _displayedColor.r, _displayedColor.g, _displayedColor.b, _displayedOpacity };
+        ccColor4B c = { m_displayedColor.r, m_displayedColor.g, m_displayedColor.b, m_displayedOpacity};
         quads[i].tl.colors = c;
         quads[i].tr.colors = c;
         quads[i].bl.colors = c;
@@ -189,7 +189,7 @@ void CCLabelAtlas::updateAtlasValues()
 //CCLabelAtlas - CCLabelProtocol
 void CCLabelAtlas::setString(const char *label)
 {
-    unsigned int len = strlen(label);
+    unsigned int len = (unsigned int)strlen(label);
     if (len > m_pTextureAtlas->getTotalQuads())
     {
         m_pTextureAtlas->resizeCapacity(len);

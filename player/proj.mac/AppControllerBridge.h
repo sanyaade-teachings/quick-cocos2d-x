@@ -11,10 +11,12 @@ public:
     {
     }
     
-    void onWelcomeNewProject(void);
-    void onWelcomeOpen(void);
-    void onWelcomeSamples(void);
-    void onWelcomeGetStarted(void);
+    void onWelcomeNewProject(CCObject *object);
+    void onWelcomeOpen(CCObject *object);
+    void onWelcomeSamples(CCObject *object);
+    void onWelcomeGetStarted(CCObject *object);
+    void onWelcomeGetCommunity(CCObject *object);
+    void onWelcomeOpenRecent(CCObject *object);
 
 private:
     void *m_controller;

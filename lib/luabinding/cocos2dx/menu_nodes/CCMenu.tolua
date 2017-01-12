@@ -30,24 +30,13 @@ THE SOFTWARE.
  * @{
  */
 
-typedef enum
-{
-    kCCMenuStateWaiting,
-    kCCMenuStateTrackingTouch
-} tCCMenuState;
-
-enum {
-    //* priority used by the menu for the event handler
-    kCCMenuHandlerPriority = -128,
-};
-
 /** @brief A CCMenu
 *
 * Features and Limitation:
 *  - You can add MenuItem objects in runtime using addChild:
 *  - But the only accepted children are MenuItem objects
 */
-class CCMenu : public CCLayerRGBA
+class CCMenu : public CCLayer
 {
     /** creates an empty CCMenu */
     static CCMenu* create();
@@ -80,9 +69,6 @@ class CCMenu : public CCLayerRGBA
 
     /** align items in columns of rows */
     void alignItemsInRowsWithArray(CCArray* columns);
-
-    /** set event handler priority. By default it is: kCCMenuTouchPriority */
-    void setHandlerPriority(int newPriority);
 
     void setOpacityModifyRGB(bool bValue);
     bool isOpacityModifyRGB(void);

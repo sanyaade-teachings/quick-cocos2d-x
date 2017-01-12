@@ -8,11 +8,13 @@ MODULE DOC
 ]]
 local Context = class("Context")
 
+PRINT_DEPRECATED("module api.Context is deprecated")
+
 --[[--
 
 ]]
 function Context:ctor()
-    require(__FRAMEWORK_PACKAGE_NAME__ .. ".api.EventProtocol").extend(self)
+    require(cc.PACKAGE_NAME .. ".api.EventProtocol").extend(self)
     self.config = {}
 end
 

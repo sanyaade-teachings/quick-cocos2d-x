@@ -1,71 +1,38 @@
-## CHINESE => [README_CN.md](README_CN.md)
+quick-cocos2d-x 是 cocos2d-x 开发商“[触控科技](http://www.chukong-inc.com/)”专门针对 Lua 开发者推出的扩展版本。
 
-quick-cocos2d-x is a **quick** framework, based cocos2d-x. Make mobile games in Lua.
+Quick-Cocos2d-x 基于 Cocos2d-x 开发，具有 Cocos2d-x 的所有优点。并在 Cocos2d-x 基础上添加了 Lua 脚本支持，和高级脚本框架。让开发商可以用更低的成本、更高的开发效率、更省的人力成本创造高品质手游产品。
 
-**CODE LESS, PLAY MORE !**
+**快速开发：** 框架自带手游需要的各种基础服务，开发商能够将有限的资源投入到产品的玩法和用户体验上。
 
-> [cocos2d-x](http://www.cocos2d-x.org) is a multi-platform 2D game engine in C++, based on cocos2d-iphone and licensed under MIT. Now this engine has been expanded to iOS, Android, Bada, BlackBerry, Marmalade and desktop operating systems like Linux, WindowsXP & Windows7.
+**降低成本：** 选择 Quick-Cocos2d-x，整个产品的绝大部分代码都可以使用 Lua 脚本语言完成开发。相比 C++ 能够显著降低人员成本，在开发效率上也具有明显优势。
 
-<br />
+**优化用户体验：** Quick-Cocos2d-x 提供了更容易使用 UI 库和脚本编译打包加密和自动更新等功能。让开发商可以用更低的成本快速改善产品的体验。
 
-## Get Started
+**成熟可靠：** 目前使用 Cocos2d-x 平台开发的热门手游产品中，几乎一半都用到了 Lua 脚本语言。而 Quick-Cocos2d-x 作为 Cocos2d-x + Lua 的升级解决方案，保持了成熟可靠的特点。
 
-quick-cocos2d-x official site: [quick-x.com](http://quick-x.com/)
+-   quick-cocos2d-x 中文站 [http://quick.cocos.org/](http://quick.cocos.org/)
+-   新浪微博 [http://weibo.com/quickcocos2dx](http://weibo.com/quickcocos2dx)
+-   QQ 群 284148017, 243709595, 8952580
+-   CSDN 镜像仓库（国内访问稳定快速），和 github 仓库同步，地址 [https://code.csdn.net/u014257247/quick-cocos2d-x](https://code.csdn.net/u014257247/quick-cocos2d-x)
+
+~
 
 
-Step 1: Get quick-cocos2d-x
+## 快速开始
 
--   [HOWTO: Setup development environment for Windows](https://github.com/dualface/quick-cocos2d-x/wiki/HOWTO-~-Setup-development-environment-for-Windows)
--   [HOWTO: Setup development environment for Mac](https://github.com/dualface/quick-cocos2d-x/wiki/HOWTO-~-Setup-development-environment-for-Mac)
+-   下载最新版 quick-cocos2d-x
+-   运行 setup_mac.sh 或者 setup_win.bat
+-   启动 player/mac/player.app 或者 player/win/player.exe
 
-<br />
+![](player/welcome/res/player_screenshot.png)
 
-Step 2: Start your project
+~
 
--   [HOWTO: Create new project](https://github.com/dualface/quick-cocos2d-x/wiki/HOWTO-~-Create-new-project)
--   [More Documents](https://github.com/dualface/quick-cocos2d-x/wiki)
--   [API Documents](http://quick-x.com/docs/api/)
 
-<br />
+## 更进一步
 
-## Run Player
-
-Open quick-cocos2d-x/player/bin/mac/quick-x-player.app, or quick-cocos2d-x/player/bin/win32/quick-x-player.exe
-
-![](http://cn.quick-x.com/wp-content/uploads/2013/08/player_01.png)
-
-1.  Select menu: File -> Open
-2.  Set Project Directory to **quick-cocos2d-x/sample/coinflip**
-3.  Set Script File to **scripts/main.lua**
-4.  Set Screen Direction to **Portrait**
-5.  Click "Open Project" button.
-
-<br />
-
-----
-
-## Why quick-cocos2d-x
-
-QUICK = SUCCESS !
-
--   **No risk**: cocos2d-x's Lua support already exists two years, mature, reliable, the choice of large companies.
-
--   **Full-featured framework**: Write the entire game using Lua, no C++ requirements.
-
--   **Native extensions**: Integration of third-party components, including Payment, Ad, Analysis. Lua-ObjectiveC and Lua-Java bridge make life easy.
-
--   **Enhanced Simulator**: Run the game from any directory, multiple resolution switching, debug console.
-
--   **100% FREE**: cocos2d-x, Lua, quick-cocos2d-x all is Open-Sources project. licensed under MIT.
-
-<br />
-
-### Framework main features:
-
--   display: creates scenes, display objects, animation ...
--   transition: moving, fades, creates animation programing easy ...
--   audio: play background music, effect sounds ...
--   ui: creates button, menu, label ...
--   luaoc: Lua call Objective-C, Objective-C call Lua ...
--   luaj: Lua call Java, Java call Lua ...
--   network: Asynchronous HTTP requests, JSON, check the network status ...
+-   [设置 quick-cocos2d-x 在 Mac 下的编译环境](docs/howto/setup_development_environment_on_mac/zh.html)
+-   [设置 quick-cocos2d-x 在 Windows 下的编译环境](docs/howto/setup_development_environment_on_windows/zh.html)
+-   [如何使用 proj.mac 和 proj.win32 工程](docs/howto/use-project-mac-and-win/zh.html)
+-   [API 文档](docs/api/index.html)
+-   [对 Lua 字节码进行加密](docs/howto/encrypt-lua-code/zh.md)

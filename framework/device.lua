@@ -1,8 +1,6 @@
 --[[
 
-Copyright (c) 2011-2012 qeeplay.com
-
-http://dualface.github.com/quick-cocos2d-x/
+Copyright (c) 2011-2014 chukong-inc.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -26,51 +24,48 @@ THE SOFTWARE.
 
 --[[--
 
-Query information about the system (get device information, current language, etc) and execute system functions (show alert view, show input box, etc).
+提供设备相关属性的查询，以及设备功能的访问
 
-<br />
+当框架初始完成后，device 模块提供下列属性：
 
-Following properties predefined:
+-   device.platform 返回当前运行平台的名字，可用值： ios, android, mac, windows.
+-   device.model 返回设备型号，可用值： unknown, iphone, ipad
+-   device.language 返回设备当前使用的语言，可用值：
+    -   cn：中文
+    -   fr：法语
+    -   it：意大利语
+    -   gr：德语
+    -   sp：西班牙语
+    -   ru：俄语
+    -   jp：日语
+    -   en：英语
+-   device.writablePath 返回设备上可以写入数据的首选路径：
+    -   iOS 上返回应用程序所在的 Documents 目录
+    -   Android 上返回存储卡的根目录
+    -   其他平台的返回值由 quick-x-player 决定
+-   device.cachePath 返回设备上可以写入数据的缓存目录：
+    -   iOS 上返回应用程序所在的 Library/Caches 目录
+    -   其他平台的返回值同 device.writablePath
+-   device.directorySeparator 目录分隔符，在 Windows 平台上是 “\”，其他平台都是 “/”
+-   device.pathSeparator 路径分隔符，在 Windows 平台上是 “;”，其他平台都是 “:”
 
--   **device.platform** the platform name (the OS name), i.e. one of the following: ios, android, blackberry, mac, windows, linux.
+-   android 平台下需要在 main Activity 将PSNative初始化: 
+    public void onCreate(Bundle savedInstanceState) {
+        PSNative.init(this);
 
--   **device.environment** returns the environment that the app is running in. i.e. one of the following: simulator, device.
-
--   **device.model** returns the device model (as specified by the manufacturer) :
-
-    - On iOS: return iPhone, iPad
-    - On Android: return Android device model name
-    - On Mac, windows, linux: return "unknown"
-
--   **device.language** returns the default language on the device :
-
-    Value       | Language
-    ----------- | -------------
-    cn          | Chinese
-    fr          | French
-    it          | Italian
-    gr          | German
-    sp          | Spanish
-    ru          | Russian
-    jp          | Japanese
-    en          | English
-
--   **device.writablePath** returns the writable path.
+        ...
+    }
 
 ]]
-
 local device = {}
 
 device.platform    = "unknown"
-device.environment = "simulator"
 device.model       = "unknown"
 
 local sharedApplication = CCApplication:sharedApplication()
 local target = sharedApplication:getTargetPlatform()
 if target == kTargetWindows then
     device.platform = "windows"
-elseif target == kTargetLinux then
-    device.platform = "linux"
 elseif target == kTargetMacOS then
     device.platform = "mac"
 elseif target == kTargetAndroid then
@@ -82,17 +77,13 @@ elseif target == kTargetIphone or target == kTargetIpad then
     else
         device.model = "ipad"
     end
-elseif target == kTargetBlackBerry then
-    device.platform = "blackberry"
-end
-
-if sharedApplication.getTargetEnvironment and sharedApplication:getTargetEnvironment() == kTargetDevice then
-    device.environment = "device"
 end
 
 local language_ = sharedApplication:getCurrentLanguage()
 if language_ == kLanguageChinese then
     language_ = "cn"
+elseif language_ == kLanguageChineseTW then
+    language_ = "tw"
 elseif language_ == kLanguageFrench then
     language_ = "fr"
 elseif language_ == kLanguageItalian then
@@ -117,168 +108,288 @@ if device.platform == "windows" then
     device.pathSeparator = ";"
 end
 
-echoInfo("# device.platform              = " .. device.platform)
-echoInfo("# device.environment           = " .. device.environment)
-echoInfo("# device.model                 = " .. device.model)
-echoInfo("# device.language              = " .. device.language)
-echoInfo("# device.writablePath          = " .. device.writablePath)
-echoInfo("# device.cachePath             = " .. device.cachePath)
-echoInfo("#")
+printInfo("# device.platform              = " .. device.platform)
+printInfo("# device.model                 = " .. device.model)
+printInfo("# device.language              = " .. device.language)
+printInfo("# device.writablePath          = " .. device.writablePath)
+printInfo("# device.cachePath             = " .. device.cachePath)
+printInfo("# device.directorySeparator    = " .. device.directorySeparator)
+printInfo("# device.pathSeparator         = " .. device.pathSeparator)
+printInfo("#")
 
 --[[--
 
-Displays a platform-specific activity indicator.
+显示活动指示器
 
-### Note:
-
-Supported platform: ios, android.
+在 iOS 和 Android 设备上显示系统的活动指示器，可以用于阻塞操作时通知用户需要等待。
 
 ]]
 function device.showActivityIndicator()
-    CCNative:showActivityIndicator()
+    if DEBUG > 1 then
+        printInfo("device.showActivityIndicator()")
+    end
+    if device.platform == "android" then
+        luaj.callStaticMethod("org/cocos2dx/utils/PSNative", "showActivityIndicator", {}, "()V"); 
+    elseif device.platform == "ios" then
+        CCNative:showActivityIndicator()
+    end
 end
 
 --[[--
 
-Hides activity indicator.
-
-### Note:
-
-Supported platform: ios, android.
+隐藏正在显示的活动指示器
 
 ]]
 function device.hideActivityIndicator()
-    CCNative:hideActivityIndicator()
+    if DEBUG > 1 then
+        printInfo("device.hideActivityIndicator()")
+    end
+    if device.platform == "android" then
+        luaj.callStaticMethod("org/cocos2dx/utils/PSNative", "hideActivityIndicator", {}, "()V"); 
+    elseif device.platform == "ios" then
+        CCNative:hideActivityIndicator()
+    end
 end
 
 --[[--
 
-Displays a popup alert box with one or more buttons. Program activity, including animation, will continue in the background, but all other user interactivity will be blocked until the user selects a button or cancels the dialog.
+显示一个包含按钮的弹出对话框
 
-### Paramters:
+~~~ lua
 
--   string **title** The title string displayed in the alert
+local function onButtonClicked(event)
+    if event.buttonIndex == 1 then
+        .... 玩家选择了 YES 按钮
+    else
+        .... 玩家选择了 NO 按钮
+    end
+end
 
--   string **message** Message string displayed in the alert text.
+device.showAlert("Confirm Exit", "Are you sure exit game ?", {"YES", "NO"}, onButtonClicked)
 
--   table **buttonLabels** Table of strings, each of which will create a button with the corresponding label.
+~~~
 
--   function **listener** The listener to be notified when a user presses any button in the alert box.
+当没有指定按钮标题时，对话框会默认显示一个“OK”按钮。
+回调函数获得的表格中，buttonIndex 指示玩家选择了哪一个按钮，其值是按钮的显示顺序。
 
-### Note:
-
-Supported platform: ios, android, mac.
+@param string title 对话框标题
+@param string message 内容
+@param table buttonLabels 包含多个按钮标题的表格对象
+@param function listener 回调函数
 
 ]]
 function device.showAlert(title, message, buttonLabels, listener)
     if type(buttonLabels) ~= "table" then
         buttonLabels = {tostring(buttonLabels)}
-    end
-    local defaultLabel = ""
-    if #buttonLabels > 0 then
-        defaultLabel = buttonLabels[1]
-        table.remove(buttonLabels, 1)
+    else
+        table.map(buttonLabels, function(v) return tostring(v) end)
     end
 
-    CCNative:createAlert(title, message, defaultLabel)
-    for i, label in ipairs(buttonLabels) do
-        CCNative:addAlertButton(label)
+    if DEBUG > 1 then
+        printInfo("device.showAlert() - title: %s", title)
+        printInfo("    message: %s", message)
+        printInfo("    buttonLabels: %s", table.concat(buttonLabels, ", "))
     end
 
-    if type(listener) ~= "function" then
-        listener = function() end
-    end
+	if device.platform == "android" then
+		local tempListner = function(event)
+			if type(event) == "string" then
+				event = require("framework.json").decode(event)
+				event.buttonIndex = tonumber(event.buttonIndex)
+			end
+			if listener then listener(event) end
+		end
+		luaj.callStaticMethod("org/cocos2dx/utils/PSNative", "createAlert", {title, message, buttonLabels, tempListner}, "(Ljava/lang/String;Ljava/lang/String;Ljava/util/Vector;I)V");
+	else
+	    local defaultLabel = ""
+	    if #buttonLabels > 0 then
+	        defaultLabel = buttonLabels[1]
+	        table.remove(buttonLabels, 1)
+	    end
 
-    CCNative:showAlertLua(listener)
+	    CCNative:createAlert(title, message, defaultLabel)
+	    for i, label in ipairs(buttonLabels) do
+	        CCNative:addAlertButton(label)
+	    end
+
+	    if type(listener) ~= "function" then
+	        listener = function() end
+	    end
+
+	    CCNative:showAlert(listener)
+	end
 end
 
 --[[--
 
-Dismisses an alert box programmatically.
+取消正在显示的对话框。
 
-For example, you may wish to have a popup alert that automatically disappears after ten seconds even if the user doesn’t click it. In that case, you could call this function at the end of a ten-second timer.
-
-### Note:
-
-Supported platform: ios, android, mac.
+提示：取消对话框，不会执行显示对话框时指定的回调函数。
 
 ]]
 function device.cancelAlert()
+    if DEBUG > 1 then
+        printInfo("device.cancelAlert()")
+    end
     CCNative:cancelAlert()
 end
 
 --[[--
 
-Returns OpenUDID for device.
+返回设备的 OpenUDID 值
 
-> OpenUDID is a drop-in replacement for the deprecated uniqueIdentifier property of the UIDevice class on iOS (a.k.a. UDID) and otherwise is an industry-friendly equivalent for iOS and Android.
+OpenUDID 是为设备仿造的 UDID（唯一设备识别码），可以用来识别用户的设备。
 
-### Returns:
+但 OpenUDID 存在下列问题：
 
--   string OpenUDID
+-   如果删除了应用再重新安装，获得的 OpenUDID 会发生变化
+-   iOS 7 不支持 OpenUDID
 
-### Note:
-
-Supported platform: ios, android, mac.
+@return string 设备的 OpenUDID 值
 
 ]]
 function device.getOpenUDID()
-    return CCNative:getOpenUDID()
+    local ret = CCNative:getOpenUDID()
+    if DEBUG > 1 then
+        printInfo("device.getOpenUDID() - Open UDID: %s", tostring(ret))
+    end
+    return ret
 end
 
 --[[--
 
-Open a web page in the browser; create an email; or call a phone number.
+用浏览器打开指定的网址
 
-Note: Executing this function will make the app background and switch to the built-in browser, email or phone app.
+~~~ lua
 
-### Parameters:
+-- 打开网页
+device.openURL("http://dualface.github.com/quick-cocos2d-x/")
 
--   string **url** url can be one of the following:
+-- 打开设备上的邮件程序，并创建新邮件，填入收件人地址
+device.openURL("mailto:nobody@mycompany.com")
+-- 增加主题和内容
+local subject = string.urlencode("Hello")
+local body = string.urlencode("How are you ?")
+device.openURL(string.format("mailto:nobody@mycompany.com?subject=%s&body=%s", subject, body))
 
-    -   Web link: "http://dualface.github.com/quick-cocos2d-x/"
+-- 打开设备上的拨号程序
+device.openURL("tel:123-456-7890")
 
-    -   Email address: "mailto:nobody@mycompany.com".
+~~~
 
-        The email address url can also contain subject and body parameters, both of which must be url encoded.<br />
-        Example: "mailto:nobody@mycompany.com?subject=Hi%20there&body=I%20just%20wanted%20to%20say%2C%20Hi!"<br />
-        Try this URL encoder to encode your text.
-
-    -   Phone number: "tel:123-456-7890"
-
-### Note:
-
-Supported platform: ios, android.
+@param string 网址，邮件，拨号等的字符串
 
 ]]
 function device.openURL(url)
+    if DEBUG > 1 then
+        printInfo("device.openURL() - url: %s", tostring(url))
+    end
     CCNative:openURL(url)
 end
 
 --[[--
 
-Displays a popup input dialog with ok and cancel button.
+显示一个输入框，并返回用户输入的内容。
 
-### Parameters:
+当用户点击取消按钮时，showInputBox() 函数返回空字符串。
 
--   string **title** The title string displayed in the input dialog
--   string **message** Message string displayed in the input dialog
--   string **defaultValue** Displayed in the text box.
+@param string title 对话框标题
+@param string message 提示信息
+@param string defaultValue 输入框默认值
 
-### Returns:
-
--   string User entered text. If uesr cancel input dialog, return nil.
-
-### Note:
-
-Supported platform: mac, windows.
+@return string 用户输入的字符串
 
 ]]
 function device.showInputBox(title, message, defaultValue)
-    title = title or "INPUT TEXT"
-    message = message or "INPUT TEXT, CLICK OK BUTTON"
-    defaultValue = defaultValue or ""
+    title = tostring(title or "INPUT TEXT")
+    message = tostring(message or "INPUT TEXT, CLICK OK BUTTON")
+    defaultValue = tostring(defaultValue or "")
+    if DEBUG > 1 then
+        printInfo("device.showInputBox() - title: %s", tostring(title))
+        printInfo("    message: %s", tostring(message))
+        printInfo("    defaultValue: %s", tostring(defaultValue))
+    end
     return CCNative:getInputText(title, message, defaultValue)
+end
+
+
+--[[--
+
+震动
+
+@param int millisecond 震动时长(毫秒) (设置震动时长仅对android有效，默认200ms) 
+
+android 需要添加震动服务权限
+<uses-permission android:name="android.permission.VIBRATE" />  
+
+
+]]
+
+function device.vibrate(millisecond)
+    if DEBUG > 1 then
+        printInfo("device.vibrate(%s)", millisecond or "")
+    end
+ 
+    if device.platform == "android" then
+        if millisecond then
+            luaj.callStaticMethod("org/cocos2dx/utils/PSNative", "vibrate", {millisecond}, "(I)V");
+        else      
+            CCNative:vibrate()
+        end     
+    elseif device.platform == "ios" then
+        CCNative:vibrate()
+    else
+        printInfo("%s platform unsupporte vibrate", device.platform)
+    end
+end
+
+--[[
+获得系统时间，精确到微妙
+
+@return cc_timeval
+
+cc_timeval.tv_sec  seconds
+cc_timeval.tv_usec microSeconds
+
+~~~ lua
+
+-- sample
+    local tm = device.gettime()
+    printInfo("%d:%d", tm.tv_sec, tm.tv_usec)  
+~~~
+
+]]
+function device.gettime()
+    local tm = cc_timeval:new()
+    CCTime:gettimeofdayCocos2d(tm, nil)
+
+    if device.platform == "windows" then
+        tm.tv_sec = os.time()
+    end
+    return tm
+end
+
+--[[
+获得时间差，精确到毫秒
+
+@param cc_timeval tm_start 开始时间
+@param cc_timeval tm_end   结束时间
+@return double             时间差(毫秒)         
+
+~~~ lua
+
+-- sample
+    local tm_start = device.gettime()
+    --do something
+    local tm_end   = device.gettime()
+    local timesub  = device.timersub(tm_start, tm_end)
+    printInfo(timesub)  
+~~~
+
+]]
+
+function device.timersub(tm_start, tm_end)
+    return CCTime:timersubCocos2d(tm_start, tm_end)
 end
 
 return device

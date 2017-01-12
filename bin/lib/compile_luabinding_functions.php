@@ -154,6 +154,7 @@ class Builder
     private $macros_;
     private $luaopenFunctionName_;
     private $password_;
+    private $configFilePath_;
 
     function __construct($parameters)
     {
@@ -165,6 +166,7 @@ class Builder
         $this->outputHeaderPath_    = $this->outputDir_ . $this->outputFilename_ . '.h';
         $this->macros_              = $parameters['macros'];
         $this->luaopenFunctionName_ = str_replace('-', '_', sprintf('luaopen_%s', $parameters['output_filename']));
+        $this->configFilePath_       = $parameters['config_filepath'];
     }
 
     function build()
@@ -179,7 +181,9 @@ class Builder
         }
         $macros = implode(' ', $macros);
 
-        $command = sprintf('"%s" %s -L "%s" -o "%s" "%s"', TOLUA_BIN, $macros, CONFIG_PATH, $this->outputSourcePath_, $this->inputPath_);
+        chdir(dirname($this->inputPath_));
+        $inputFilename = pathinfo($this->inputPath_, PATHINFO_BASENAME);
+        $command = sprintf('"%s" %s -L "%s" -o "%s" "%s"', TOLUA_BIN, $macros, $this->configFilePath_, $this->outputSourcePath_, $inputFilename);
         printf("\ncommand: %s\n\n", $command);
 
         printf("creating file: %s\n\n", $this->outputSourcePath_);
@@ -237,10 +241,19 @@ EOT;
 
         foreach ($this->rules_ as $find => $replace)
         {
-            $find = str_replace('##LUABINDING_FILENAME##', $this->outputFilename_, $find);
-            $replace = str_replace('##LUABINDING_FILENAME##', $this->outputFilename_, $replace);
-            $contents = str_replace($find, $replace, $contents);
+        		$find = str_replace("\r", '', $find);
+						$find = str_replace('##LUABINDING_FILENAME##', $this->outputFilename_, $find);
+						$replace = str_replace("\r", '', $replace);
+						$replace = str_replace('##LUABINDING_FILENAME##', $this->outputFilename_, $replace);
+						$contents = str_replace($find, $replace, $contents);
+
+            //$find = str_replace('##LUABINDING_FILENAME##', $this->outputFilename_, $find);
+            //$replace = str_replace('##LUABINDING_FILENAME##', $this->outputFilename_, $replace);
+            //$contents = str_replace($find, $replace, $contents);
         }
+
+        // $contents = preg_replace('/tolua_usertype\(tolua_S,"(\w+)"\);/', 'tolua_usertype(tolua_S,"\1"); toluafix_add_type_mapping(typeid(\1).hash_code(), "\1");', $contents);
+        $contents = preg_replace('/tolua_usertype\(tolua_S,"(\w+)"\);/', 'tolua_usertype(tolua_S,"\1"); toluafix_add_type_mapping(CLASS_HASH_CODE(typeid(\1)), "\1");', $contents);
 
         file_put_contents($this->outputSourcePath_, $contents);
     }
@@ -320,7 +333,7 @@ function long2str($v, $w) {
 }
 
 function str2long($s, $w) {
-    $v = unpack("V*", $s. str_repeat("\0", (4 - strlen($s) % 4) & 3));
+    $v = unpack("V*", $s . str_repeat("\0", (4 - strlen($s) % 4) & 3));
     $v = array_values($v);
     if ($w) {
         $v[count($v)] = strlen($s);

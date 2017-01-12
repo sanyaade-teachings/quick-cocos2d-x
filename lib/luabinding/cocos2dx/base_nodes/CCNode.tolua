@@ -25,6 +25,9 @@
  THE SOFTWARE.
  ****************************************************************************/
 
+#define kCCTouchesAllAtOnce                 0
+#define kCCTouchesOneByOne                  1
+
 /**
  * @addtogroup base_nodes
  * @{
@@ -85,7 +88,7 @@
  - Each node has a camera. By default it points to the center of the CCNode.
  */
 
-class CCNode : public CCObject
+class CCNode : public CCScriptEventDispatcher
 {
     /// @{
     /// @name Constructor, Distructor and Initializers
@@ -400,28 +403,6 @@ class CCNode : public CCObject
      */
     float getRotationY();
 
-
-    /**
-     * Sets the arrival order when this node has a same ZOrder with other children.
-     *
-     * A node which called addChild subsequently will take a larger arrival order,
-     * If two children have the same Z order, the child with larger arrival order will be drawn later.
-     *
-     * @warning This method is used internally for zOrder sorting, don't change this manually
-     *
-     * @param uOrderOfArrival   The arrival order.
-     */
-    void setOrderOfArrival(unsigned int uOrderOfArrival);
-    /**
-     * Returns the arrival order, indecates which children is added previously.
-     *
-     * @see setOrderOfArrival(unsigned int)
-     *
-     * @return The arrival order.
-     */
-    unsigned int getOrderOfArrival();
-
-
     /**
      * Sets whether the anchor point will be (0,0) when you position this node.
      *
@@ -431,7 +412,9 @@ class CCNode : public CCObject
      * @param ignore    true if anchor point will be (0,0) when you position this node
      * @todo This method shoud be renamed as setIgnoreAnchorPointForPosition(bool) or something with "set"
      */
+    void ignoreAnchorPointForPosition @ setIgnoreAnchorPointForPosition (bool ignore);
     void ignoreAnchorPointForPosition(bool ignore);
+
     /**
      * Gets whether the anchor point will be (0,0) when you position this node.
      *
@@ -528,43 +511,28 @@ class CCNode : public CCObject
      * If the node orphan, then nothing happens.
      * @see removeFromParentAndCleanup(bool)
      */
+    void removeSelf();
     void removeFromParent();
     /**
      * Removes this node itself from its parent node.
      * If the node orphan, then nothing happens.
      * @param cleanup   true if all actions and callbacks on this node should be removed, false otherwise.
      */
-    void removeFromParentAndCleanup(bool cleanup);
+    void removeFromParentAndCleanup(bool cleanup = true);
     /**
      * Removes a child from the container. It will also cleanup all running actions depending on the cleanup parameter.
      *
      * @param child     The child node which will be removed.
      * @param cleanup   true if all running actions and callbacks on the child node will be cleanup, false otherwise.
      */
-    void removeChild(CCNode* child, bool cleanup);
-    /**
-     * Removes a child from the container with a cleanup
-     *
-     * @see removeChild(CCNode, bool)
-     *
-     * @param child     The child node which will be removed.
-     */
-    void removeChild(CCNode* child);
+    void removeChild(CCNode* child, bool cleanup = true);
     /**
      * Removes a child from the container by tag value. It will also cleanup all running actions depending on the cleanup parameter
      *
      * @param tag       An interger number that identifies a child node
      * @param cleanup   true if all running actions and callbacks on the child node will be cleanup, false otherwise.
      */
-    void removeChildByTag(int tag, bool cleanup);
-    /**
-     * Removes a child from the container by tag value with a cleanup.
-     *
-     * @see removeChildByTag(int, bool)
-     *
-     * @param tag       An interger number that identifies a child node
-     */
-    void removeChildByTag(int tag);
+    void removeChildByTag(int tag, bool cleanup = true);
     /**
      * Removes all children from the container with a cleanup.
      *
@@ -576,7 +544,7 @@ class CCNode : public CCObject
      *
      * @param cleanup   true if all running actions on all children nodes should be cleanup, false oterwise.
      */
-    void removeAllChildrenWithCleanup(bool cleanup);
+    void removeAllChildrenWithCleanup(bool cleanup = true);
 
     /**
      * Reorders a child according to a new z value.
@@ -594,6 +562,25 @@ class CCNode : public CCObject
     void sortAllChildren();
 
     /// @} end of Children and Parent
+
+    /// @{
+    /// @name Grid object for effects
+
+    /**
+     * Returns a grid object that is used when applying effects
+     *
+     * @return A CCGrid object that is used when applying effects
+     */
+    CCGridBase* getGrid();
+    /**
+     * Changes a grid object that is used when applying effects
+     *
+     * @param A CCGrid object that is used when applying effects
+     */
+    void setGrid(CCGridBase *pGrid);
+
+    /// @} end of Grid
+
 
     /// @{
     /// @name Tag & User data
@@ -709,41 +696,6 @@ class CCNode : public CCObject
     bool isRunning();
 
 
-    /// @{
-    /// @name Script Bindings for lua
-
-    /**
-     * Registers a script function that will be called in onEnter() & onExit() seires functions.
-     *
-     * This handler will be removed automatically after onExit() called.
-     * @code
-     * -- lua sample
-     * local function sceneEventHandler(eventType)
-     *     if eventType == kCCNodeOnEnter then
-     *         -- do something
-     *     elseif evetType == kCCNodeOnExit then
-     *         -- do something
-     *     end
-     * end
-     * scene::registerScriptHandler(sceneEventHandler)
-     * @endcode
-     *
-     * @warning This method is for internal usage, don't call it manually.
-     * @todo Perhaps we should rename it to get/set/removeScriptHandler acoording to the function name style.
-     *
-     * @param handler   A number that indicates a lua function.
-     */
-    void registerScriptHandler(LUA_FUNCTION handler);
-    /**
-     * Unregisters a script function that will be called in onEnter() & onExit() series functions.
-     *
-     * @see registerScriptHandler(int)
-     */
-    void unregisterScriptHandler(void);
-
-    /// @}  end Script Bindings
-
-
     /**
      * Stops all running actions and schedulers
      */
@@ -765,8 +717,15 @@ class CCNode : public CCObject
      *
      * @return A "local" axis aligned boudning box of the node.
      */
-    CCRect boundingBox @ getBoundingBox(void);
     CCRect boundingBox(void);
+    CCRect boundingBox @ getBoundingBox(void);
+
+    /**
+     * This boundingBox will calculate all children's boundingBox every time
+     */
+    CCRect getCascadeBoundingBox(void);
+    void setCascadeBoundingBox(CCRect boundingBox);
+    void resetCascadeBoundingBox(void);
 
     /// @{
     /// @name Actions
@@ -820,6 +779,7 @@ class CCNode : public CCObject
      * @return The number of actions that are running plus the ones that are schedule to run
      */
     unsigned int numberOfRunningActions(void);
+    unsigned int numberOfRunningActions @ getNumberOfRunningActions (void);
 
     /// @} end of Actions
 
@@ -833,6 +793,7 @@ class CCNode : public CCObject
      * It will use the order number 0. This method will be called every frame.
      * Scheduled methods with a lower order value will be called before the ones that have a higher order value.
      * Only one "update" method could be scheduled per node.
+     * @lua NA
      */
     void scheduleUpdate(void);
 
@@ -842,6 +803,7 @@ class CCNode : public CCObject
      * This selector will be called every frame.
      * Scheduled methods with a lower priority will be called before the ones that have a higher value.
      * Only one "update" selector could be scheduled per node (You can't have 2 'update' selectors).
+     * @lua NA
      */
     void scheduleUpdateWithPriority(int priority);
 
@@ -851,10 +813,8 @@ class CCNode : public CCObject
      */
     void unscheduleUpdate(void);
 
-    /**
-     * Schedules for lua script.
-     */
-    void scheduleUpdateWithPriorityLua(LUA_FUNCTION nHandler, int priority);
+    void resumeSchedulerAndActions(void);
+    void pauseSchedulerAndActions(void);
 
     /// @} end of Scheduler and Timer
 
@@ -894,39 +854,196 @@ class CCNode : public CCObject
     CCPoint convertTouchToNodeSpaceAR(CCTouch * touch);
 
     /// @} end of Coordinate Converters
-};
 
-//#pragma mark - CCNodeRGBA
+    /**
+     *  Sets the additional transform.
+     *
+     *  @note The additional transform will be concatenated at the end of nodeToParentTransform.
+     *        It could be used to simulate `parent-child` relationship between two nodes (e.g. one is in BatchNode, another isn't).
+     *  @code
+     // create a batchNode
+     CCSpriteBatchNode* batch= CCSpriteBatchNode::create("Icon-114.png");
+     this->addChild(batch);
 
-/** CCNodeRGBA is a subclass of CCNode that implements the CCRGBAProtocol protocol.
+     // create two sprites, spriteA will be added to batchNode, they are using different textures.
+     CCSprite* spriteA = CCSprite::createWithTexture(batch->getTexture());
+     CCSprite* spriteB = CCSprite::create("Icon-72.png");
 
- All features from CCNode are valid, plus the following new features:
- - opacity
- - RGB colors
+     batch->addChild(spriteA);
 
- Opacity/Color propagates into children that conform to the CCRGBAProtocol if cascadeOpacity/cascadeColor is enabled.
- @since v2.1
- */
-class CCNodeRGBA : public CCNode
-{
-    static CCNodeRGBA * create(void);
+     // We can't make spriteB as spriteA's child since they use different textures. So just add it to layer.
+     // But we want to simulate `parent-child` relationship for these two node.
+     this->addChild(spriteB);
 
-    GLubyte getOpacity();
-    GLubyte getDisplayedOpacity();
+     //position
+     spriteA->setPosition(ccp(200, 200));
+
+     // Gets the spriteA's transform.
+     CCAffineTransform t = spriteA->nodeToParentTransform();
+
+     // Sets the additional transform to spriteB, spriteB's postion will based on its pseudo parent i.e. spriteA.
+     spriteB->setAdditionalTransform(t);
+
+     //scale
+     spriteA->setScale(2);
+
+     // Gets the spriteA's transform.
+     t = spriteA->nodeToParentTransform();
+
+     // Sets the additional transform to spriteB, spriteB's scale will based on its pseudo parent i.e. spriteA.
+     spriteB->setAdditionalTransform(t);
+
+     //rotation
+     spriteA->setRotation(20);
+
+     // Gets the spriteA's transform.
+     t = spriteA->nodeToParentTransform();
+
+     // Sets the additional transform to spriteB, spriteB's rotation will based on its pseudo parent i.e. spriteA.
+     spriteB->setAdditionalTransform(t);
+     *  @endcode
+     */
+    void setAdditionalTransform(const CCAffineTransform& additionalTransform);
+
+    /// @} end of Coordinate Converters
+
+    /// @{
+    /// @name component functions
+    /**
+     *   gets a component by its name
+     */
+    CCComponent* getComponent(const char *pName);
+
+    /**
+     *   adds a component
+     */
+    virtual bool addComponent(CCComponent *pComponent);
+
+    /**
+     *   removes a component by its name
+     */
+    virtual bool removeComponent(const char *pName);
+
+    /**
+     *   removes a component by its pointer
+     */
+    virtual bool removeComponent(CCComponent *pComponent);
+
+    /**
+     *   removes all components
+     */
+    virtual void removeAllComponents();
+    /// @} end of component functions
+
+    /// @{
+    /**
+     * Changes the color with R,G,B bytes
+     *
+     * @param color Example: ccc3(255,100,0) means R=255, G=100, B=0
+     */
+    void setColor(const ccColor3B& color);
+
+    /**
+     * Returns color that is currently used.
+     *
+     * @return The ccColor3B contains R,G,B bytes.
+     */
+    const ccColor3B& getColor(void);
+
+    /**
+     * Returns the displayed color.
+     *
+     * @return The ccColor3B contains R,G,B bytes.
+     */
+    const ccColor3B& getDisplayedColor(void);
+
+    /**
+     * Returns the displayed opacity.
+     *
+     * @return  The opacity of sprite, from 0 ~ 255
+     */
+    GLubyte getDisplayedOpacity(void);
+    /**
+     * Returns the opacity.
+     *
+     * The opacity which indicates how transparent or opaque this node is.
+     * 0 indicates fully transparent and 255 is fully opaque.
+     *
+     * @return  The opacity of sprite, from 0 ~ 255
+     */
+    GLubyte getOpacity(void);
+
+    /**
+     * Changes the opacity.
+     *
+     * @param   value   Goes from 0 to 255, where 255 means fully opaque and 0 means fully transparent.
+     */
     void setOpacity(GLubyte opacity);
-    void updateDisplayedOpacity(GLubyte parentOpacity);
-    bool isCascadeOpacityEnabled();
-    void setCascadeOpacityEnabled(bool cascadeOpacityEnabled);
 
-    ccColor3B getColor(void);
-    ccColor3B getDisplayedColor();
-    void setColor(ccColor3B color);
-    void updateDisplayedColor(ccColor3B parentColor);
-    bool isCascadeColorEnabled();
+    // optional
+
+    /**
+     * Changes the OpacityModifyRGB property.
+     * If thie property is set to true, then the rendered color will be affected by opacity.
+     * Normally, r = r * opacity/255, g = g * opacity/255, b = b * opacity/255.
+     *
+     * @param   bValue  true then the opacity will be applied as: glColor(R,G,B,opacity);
+     *                  false then the opacity will be applied as: glColor(opacity, opacity, opacity, opacity);
+     */
+    void setOpacityModifyRGB(bool bValue);
+
+    /**
+     * Returns whether or not the opacity will be applied using glColor(R,G,B,opacity)
+     * or glColor(opacity, opacity, opacity, opacity)
+     *
+     * @return  Returns opacity modify flag.
+     */
+    bool isOpacityModifyRGB(void);
+
+    /**
+     *  whether or not color should be propagated to its children.
+     */
+    bool isCascadeColorEnabled(void);
     void setCascadeColorEnabled(bool cascadeColorEnabled);
 
-    void setOpacityModifyRGB(bool bValue);
-    bool isOpacityModifyRGB();
+    /**
+     *  recursive method that updates display color
+     */
+    void updateDisplayedColor(const ccColor3B& color);
+
+    /**
+     *  whether or not opacity should be propagated to its children.
+     */
+    bool isCascadeOpacityEnabled(void);
+    void setCascadeOpacityEnabled(bool cascadeOpacityEnabled);
+
+    /**
+     *  recursive method that updates the displayed opacity.
+     */
+    void updateDisplayedOpacity(GLubyte opacity);
+    /// @}
+
+    /// @{
+
+    CCScene *getScene();
+
+    /** whether or not it will receive Touch events.
+     You can enable / disable touch events with this property.
+     Only the touches of this node will be affected. This "method" is not propagated to it's children.
+     @since v0.8.1
+     */
+    bool isTouchCaptureEnabled();
+    void setTouchCaptureEnabled(bool value);
+
+    bool isTouchSwallowEnabled();
+    void setTouchSwallowEnabled(bool value);
+
+    bool isTouchEnabled();
+    void setTouchEnabled(bool value);
+
+    void setTouchMode(int mode);
+    int getTouchMode();
+    /// @}
 };
 
 // end of base_node group

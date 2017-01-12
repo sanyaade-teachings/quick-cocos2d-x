@@ -123,6 +123,8 @@ bool CCParticleBatchNode::initWithFile(const char* fileImage, unsigned int capac
 // Don't call visit on it's children
 void CCParticleBatchNode::visit()
 {
+    m_drawOrder = ++g_drawOrder;
+
     // CAREFUL:
     // This visit is almost identical to CCNode#visit
     // with the exception that it doesn't call visit on it's children
@@ -146,6 +148,9 @@ void CCParticleBatchNode::visit()
     transform();
 
     draw();
+
+    // reset for next frame
+    m_uOrderOfArrival = 0;
 
     if ( m_pGrid && m_pGrid->isActive())
     {

@@ -1,8 +1,6 @@
 --[[
 
-Copyright (c) 2011-2012 qeeplay.com
-
-http://dualface.github.com/quick-cocos2d-x/
+Copyright (c) 2011-2014 chukong-inc.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -26,24 +24,18 @@ THE SOFTWARE.
 
 --[[--
 
-Call Java form Lua, and call Lua from Java.
-
--   Call Java Class Static Method from Lua
--   Pass Lua function to Java
--   Call Lua function from Java
-
-<br />
-
-**References:**
-
--   [LuaJavaBridge - Call Java from Lua (Chinese only)](http://dualface.github.com/blog/2013/01/01/call-java-from-lua/)
+Lua 与 Java 的交互接口
 
 ]]
-
 local luaj = {}
 
 local callJavaStaticMethod = CCLuaJavaBridge.callStaticMethod
 
+--[[--
+
+私有方法
+
+]]
 local function checkArguments(args, sig)
     if type(args) ~= "table" then args = {} end
     if sig then return args, sig end
@@ -68,39 +60,21 @@ end
 
 --[[--
 
-Call Java Class Static Method
+调用java类的接口。
 
-### Example:
+只能调用java类的静态方法
 
-    local className = "com/flurry/android/FlurryAgent"
-    local args = {"APP_START"}
-    local sig  = "(Ljava/lang/String;)V"
-    local ok = luaj.callStaticMethod(className, "logEvent", args, sig)
-    if ok then
-        -- call success
-    else
-        -- call failure
-    end
+@param string className java类名
+@param string methodName java类静态方法名
+@param table args java类静态方法所需要的各种参数 数组
+@param [string sig] java类方法的签名
 
-### Parameters:
-
--   string **className** Java class name
--   string **methodName** Method name
--   [_optional table **args**_] Arguments pass to Java
--   [_optional string **sig**_] Java Method Signature
-
-
-> Java Method Signature reference: [JNI Types and Data Structures](http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/types.html#wp16432)
-
-### Returns:
-
--   boolean call success or failure
--   mixed Java method returned value
+@return boolean ok, mixed ret ok为是否调用成功, ok为true时,ret为java方法的返回值,ok为false时,ret为出错原因
 
 ]]
 function luaj.callStaticMethod(className, methodName, args, sig)
     local args, sig = checkArguments(args, sig)
-    echoInfo("luaj.callStaticMethod(\"%s\",\n\t\"%s\",\n\targs,\n\t\"%s\"", className, methodName, sig)
+    printInfo("luaj.callStaticMethod(\"%s\",\n\t\"%s\",\n\targs,\n\t\"%s\"", className, methodName, sig)
     return callJavaStaticMethod(className, methodName, args, sig)
 end
 

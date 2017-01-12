@@ -33,7 +33,7 @@ extern "C" {
 
 		JavaVM* jvm = cocos2d::JniHelper::getJavaVM();
 		if (NULL == jvm) {
-			LOGD("Failed to get JNIEnv. JniHelper::getJavaVM() is NULL");
+			LOGD("%s", "Failed to get JNIEnv. JniHelper::getJavaVM() is NULL");
 			return NULL;
 		}
 
@@ -55,7 +55,7 @@ extern "C" {
 
 			if (jvm->AttachCurrentThread(&env, NULL) < 0)
 			{
-				LOGD("Failed to get the environment using AttachCurrentThread()");
+				LOGD("%s", "Failed to get the environment using AttachCurrentThread()");
 				return NULL;
 			} else {
 				// Success : Attached and obtained JNIEnv!
@@ -64,9 +64,9 @@ extern "C" {
 
 		case JNI_EVERSION :
 			// Cannot recover from this error
-			LOGD("JNI interface version 1.4 not supported");
+			LOGD("%s", "JNI interface version 1.4 not supported");
 		default :
-			LOGD("Failed to get the environment using GetEnv()");
+			LOGD("%s", "Failed to get the environment using GetEnv()");
 			return NULL;
 		}
 	}
@@ -331,7 +331,7 @@ void OpenSLEngine::createEngine(void* pHandle)
 	const char* errorInfo = dlerror();
 	if (errorInfo)
 	{
-		LOGD(errorInfo);
+		LOGD("%s", errorInfo);
 		return;
 	}
 
@@ -400,7 +400,7 @@ void OpenSLEngine::closeEngine()
 		s_pEngineEngine = NULL;
 	}
 
-	LOGD("engine destory");
+	LOGD("%s", "engine destory");
 }
 
 
@@ -483,7 +483,7 @@ bool OpenSLEngine::recreatePlayer(const char* filename)
 	AudioPlayer* newPlayer = new AudioPlayer();
 	if (!initAudioPlayer(newPlayer, filename))
 	{
-		LOGD("failed to recreate");
+		LOGD("%s", "failed to recreate");
 		return false;
 	}
 	vec->push_back(newPlayer);

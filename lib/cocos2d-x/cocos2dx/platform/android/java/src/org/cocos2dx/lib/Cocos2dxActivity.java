@@ -39,24 +39,25 @@ public abstract class Cocos2dxActivity extends Activity implements Cocos2dxHelpe
 	// Constants
 	// ===========================================================
 
+	public static final int GLVIEW_ID = 1000;
 	private static final String TAG = Cocos2dxActivity.class.getSimpleName();
 
 	// ===========================================================
 	// Fields
 	// ===========================================================
-
+	
 	private Cocos2dxGLSurfaceView mGLSurfaceView;
 	private Cocos2dxHandler mHandler;
 	private static Context sContext = null;
-
+	
 	public static Context getContext() {
 		return sContext;
 	}
-
+	
 	// ===========================================================
 	// Constructors
 	// ===========================================================
-
+	
 	@Override
 	protected void onCreate(final Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -76,33 +77,21 @@ public abstract class Cocos2dxActivity extends Activity implements Cocos2dxHelpe
 	// Methods for/from SuperClass/Interfaces
 	// ===========================================================
 
-	// @Override
-	// protected void onResume() {
-	// 	super.onResume();
+	@Override
+	protected void onResume() {
+		super.onResume();
 
-	// 	Cocos2dxHelper.onResume();
-	// 	this.mGLSurfaceView.onResume();
-	// }
+		Cocos2dxHelper.onResume();
+		this.mGLSurfaceView.onResume();
+	}
 
-	// @Override
-	// protected void onPause() {
-	// 	super.onPause();
+	@Override
+	protected void onPause() {
+		super.onPause();
 
-	// 	Cocos2dxHelper.onPause();
-	// 	this.mGLSurfaceView.onPause();
-	// }
-
-    @Override
-    public void onWindowFocusChanged(final boolean hasWindowFocus) {
-        super.onWindowFocusChanged(hasWindowFocus);
-        if (hasWindowFocus) {
-            Cocos2dxHelper.onResume();
-            this.mGLSurfaceView.onResume();
-        } else {
-            Cocos2dxHelper.onPause();
-            this.mGLSurfaceView.onPause();
-        }
-    }
+		Cocos2dxHelper.onPause();
+		this.mGLSurfaceView.onPause();
+	}
 
 	@Override
 	public void showDialog(final String pTitle, final String pMessage) {
@@ -113,29 +102,29 @@ public abstract class Cocos2dxActivity extends Activity implements Cocos2dxHelpe
 	}
 
 	@Override
-	public void showEditTextDialog(final String pTitle, final String pContent, final int pInputMode, final int pInputFlag, final int pReturnType, final int pMaxLength) {
+	public void showEditTextDialog(final String pTitle, final String pContent, final int pInputMode, final int pInputFlag, final int pReturnType, final int pMaxLength) { 
 		Message msg = new Message();
 		msg.what = Cocos2dxHandler.HANDLER_SHOW_EDITBOX_DIALOG;
 		msg.obj = new Cocos2dxHandler.EditBoxMessage(pTitle, pContent, pInputMode, pInputFlag, pReturnType, pMaxLength);
 		this.mHandler.sendMessage(msg);
 	}
-
+	
 	@Override
 	public void runOnGLThread(final Runnable pRunnable) {
 		this.mGLSurfaceView.queueEvent(pRunnable);
 	}
-
+	protected static FrameLayout mFrameLayout;
 	// ===========================================================
 	// Methods
 	// ===========================================================
 	public void init() {
-
+		
     	// FrameLayout
         ViewGroup.LayoutParams framelayout_params =
             new ViewGroup.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT,
                                        ViewGroup.LayoutParams.FILL_PARENT);
-        FrameLayout framelayout = new FrameLayout(this);
-        framelayout.setLayoutParams(framelayout_params);
+        mFrameLayout = new FrameLayout(this);
+        mFrameLayout.setLayoutParams(framelayout_params);
 
         // Cocos2dxEditText layout
         ViewGroup.LayoutParams edittext_layout_params =
@@ -145,13 +134,15 @@ public abstract class Cocos2dxActivity extends Activity implements Cocos2dxHelpe
         edittext.setLayoutParams(edittext_layout_params);
 
         // ...add to FrameLayout
-        framelayout.addView(edittext);
+        mFrameLayout.addView(edittext);
 
         // Cocos2dxGLSurfaceView
         this.mGLSurfaceView = this.onCreateView();
+        //set id for GlSurfaceView, so can find by id and set focus on
+        this.mGLSurfaceView.setId(GLVIEW_ID);
 
         // ...add to FrameLayout
-        framelayout.addView(this.mGLSurfaceView);
+        mFrameLayout.addView(this.mGLSurfaceView);
 
         // Switch to supported OpenGL (ARGB888) mode on emulator
         if (isAndroidEmulator())
@@ -161,11 +152,14 @@ public abstract class Cocos2dxActivity extends Activity implements Cocos2dxHelpe
         this.mGLSurfaceView.setCocos2dxEditText(edittext);
 
         // Set framelayout as the content view
-		setContentView(framelayout);
+		setContentView(mFrameLayout);
 	}
-
+	
     public Cocos2dxGLSurfaceView onCreateView() {
-    	return new Cocos2dxGLSurfaceView(this);
+    	// return new Cocos2dxGLSurfaceView(this);
+    	Cocos2dxGLSurfaceView glSurfaceView = new Cocos2dxGLSurfaceView(this);
+    	glSurfaceView.setEGLConfigChooser(5, 6, 5, 0, 16, 8);
+    	return glSurfaceView;
     }
 
    private final static boolean isAndroidEmulator() {

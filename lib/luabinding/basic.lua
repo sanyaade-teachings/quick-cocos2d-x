@@ -17,15 +17,25 @@ local CCObjectTypes = {
     "CCAnimate",
     "CCAnimation",
     "CCAnimationCache",
+    "CCAnimationData",
     "CCAnimationFrame",
+    "CCArmature",
+    "CCArmatureAnimation",
+    "CCArmatureData",
+    "CCArmatureDataManager",
+    "CCArmatureDisplayData",
     "CCArray",
     "CCAtlasNode",
+    "CCBatchNode",
     "CCBezierBy",
     "CCBezierTo",
     "CCBlink",
+    "CCBone",
+    "CCBoneData",
     "CCBool",
     "CCCallFunc",
     "CCCallFuncN",
+    "CCCamera",
     "CCCardinalSplineBy",
     "CCCardinalSplineTo",
     "CCCatmullRomBy",
@@ -35,10 +45,20 @@ local CCObjectTypes = {
     "CCClippingRegionNode",
     "CCComponent",
     "CCConfiguration",
+    "CCControl",
+    "CCControlButton",
+    "CCControlColourPicker",
+    "CCControlHuePicker",
+    "CCControlPotentiometer",
+    "CCControlSaturationBrightnessPicker",
+    "CCControlSlider",
+    "CCControlStepper",
+    "CCControlSwitch",
     "CCDeccelAmplitude",
     "CCDelayTime",
     "CCDictionary",
     "CCDirector",
+    "CCDisplayData",
     "CCDouble",
     "CCDrawNode",
     "CCEaseBackIn",
@@ -62,6 +82,7 @@ local CCObjectTypes = {
     "CCEaseSineIn",
     "CCEaseSineInOut",
     "CCEaseSineOut",
+    "CCEditBox",
     "CCFadeIn",
     "CCFadeOut",
     "CCFadeOutBLTiles",
@@ -76,8 +97,12 @@ local CCObjectTypes = {
     "CCFlipY3D",
     "CCFloat",
     "CCFollow",
+    "CCFrameData",
+    "CCGLProgram",
+    "CCGraySprite",
     "CCGrid3DAction",
     "CCGridAction",
+    "CCGridBase",
     "CCHide",
     "CCImage",
     "CCInteger",
@@ -92,7 +117,6 @@ local CCObjectTypes = {
     "CCLayerColor",
     "CCLayerGradient",
     "CCLayerMultiplex",
-    "CCLayerRGBA",
     "CCLens3D",
     "CCLinkPosition",
     "CCLiquid",
@@ -106,15 +130,17 @@ local CCObjectTypes = {
     "CCMenuItemToggle",
     "CCMotionStreak",
     "CCMoveBy",
+    "CCMovementBoneData",
+    "CCMovementData",
     "CCMoveTo",
     "CCNode",
-    "CCNodeRGBA",
     "CCNotificationCenter",
     "CCObject",
     "CCOrbitCamera",
     "CCPageTurn3D",
     "CCParallaxNode",
     "CCParticleBatchNode",
+    "CCParticleDisplayData",
     "CCParticleExplosion",
     "CCParticleFire",
     "CCParticleFireworks",
@@ -147,10 +173,12 @@ local CCObjectTypes = {
     "CCRipple3D",
     "CCRotateBy",
     "CCRotateTo",
+    "CCScale9Sprite",
     "CCScaleBy",
     "CCScaleTo",
     "CCScene",
     "CCScheduler",
+    "CCScrollView",
     "CCSequence",
     "CCSet",
     "CCShaky3D",
@@ -167,13 +195,17 @@ local CCObjectTypes = {
     "CCSplitRows",
     "CCSprite",
     "CCSpriteBatchNode",
+    "CCSpriteDisplayData",
     "CCSpriteFrame",
     "CCSpriteFrameCache",
     "CCStopGrid",
     "CCString",
+    "CCTableView",
+    "CCTableViewCell",
     "CCTargetedAction",
     "CCTextFieldTTF",
     "CCTexture2D",
+    "CCTextureAtlas",
     "CCTextureCache",
     "CCTiledGrid3DAction",
     "CCTileMapAtlas",
@@ -324,19 +356,52 @@ extern "C" {
 using namespace cocos2d;
 using namespace CocosDenshion;]])
 
-      replace([[/* Exported function */
+    replace([[/* Exported function */
 TOLUA_API int  tolua_Cocos2d_open (lua_State* tolua_S);]], [[]])
 
-      replace([[*((LUA_FUNCTION*)]], [[(]])
+    replace([[*((LUA_FUNCTION*)]], [[(]])
 
-      replace([[tolua_usertype(tolua_S,"LUA_FUNCTION");]], [[]])
+    replace([[tolua_usertype(tolua_S,"LUA_FUNCTION");]], [[]])
 
-      replace([[toluafix_pushusertype_ccobject(tolua_S,(void*)tolua_ret]],
+    replace([[toluafix_pushusertype_ccobject(tolua_S,(void*)tolua_ret]],
         [[int nID = (tolua_ret) ? (int)tolua_ret->m_uID : -1;
     int* pLuaID = (tolua_ret) ? &tolua_ret->m_nLuaID : NULL;
     toluafix_pushusertype_ccobject(tolua_S, nID, pLuaID, (void*)tolua_ret]])
 
-      replace('\t', '    ')
+    replace([[int tolua_ret = (int)  self->getFileData(pszFileName);
+   tolua_pushnumber(tolua_S,(lua_Number)tolua_ret);]],
+        [[unsigned long size = 0;
+    unsigned char* buffer = self->getFileData(pszFileName, "rb", &size);
+    if (buffer && size)
+    {
+        lua_pushlstring(tolua_S, (char*)buffer, size);
+    }
+    else
+    {
+        lua_pushnil(tolua_S);
+    }
+    if (buffer) delete[] buffer;]])
+
+    replace([[int tolua_ret = (int)  self->getFileDataFromZip(pszZipFilePath,pszFileName);
+   tolua_pushnumber(tolua_S,(lua_Number)tolua_ret);]],
+        [[unsigned long size = 0;
+    unsigned char* buffer = self->getFileDataFromZip(pszZipFilePath, pszFileName, &size);
+    if (buffer && size)
+    {
+        lua_pushlstring(tolua_S, (char*)buffer, size);
+    }
+    else
+    {
+        lua_pushnil(tolua_S);
+    }
+    if (buffer) delete[] buffer;]])
+
+    replace('\t', '    ')
+
+    result = string.gsub(result,
+        [[tolua_usertype%(tolua_S,"([%a%d]+)"%);]],
+        [[tolua_usertype(tolua_S,"%1");
+ toluafix_add_type_mapping(CLASS_HASH_CODE(typeid(%1)), "%1");]])
 
     WRITE(result)
 end

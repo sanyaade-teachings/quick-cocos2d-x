@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 2010 cocos2d-x.org
+Copyright (c) Microsoft Open Technologies, Inc.
 
 http://www.cocos2d-x.org
 
@@ -30,9 +31,25 @@ THE SOFTWARE.
 #include "CCCommon.h"
 #include "CCStdC.h"
 #include "CCFileUtils.h"
+#include "apptools/HelperFunc.h"
 #include "png.h"
+
+#if CC_JPEG_ENABLED > 0
 #include "jpeglib.h"
+#endif
+
+#if CC_TIFF_ENABLED > 0
 #include "tiffio.h"
+#endif
+
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_WINRT) || (CC_TARGET_PLATFORM == CC_PLATFORM_WP8)
+#include "CCFreeTypeFont.h"
+#endif
+
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)
+#include "platform/android/CCFileUtilsAndroid.h"
+#endif
+
 #include <string>
 #include <ctype.h>
 
@@ -87,12 +104,17 @@ CCImage::CCImage()
 , m_bHasAlpha(false)
 , m_bPreMulti(false)
 {
-
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_WINRT) || (CC_TARGET_PLATFORM == CC_PLATFORM_WP8)
+    m_ft = nullptr;
+#endif
 }
 
 CCImage::~CCImage()
 {
     CC_SAFE_DELETE_ARRAY(m_pData);
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_WINRT) || (CC_TARGET_PLATFORM == CC_PLATFORM_WP8)
+    CC_SAFE_DELETE(m_ft);
+#endif
 }
 
 bool CCImage::initWithImageFile(const char * strPath, EImageFormat eImgFmt/* = eFmtPng*/)
@@ -121,7 +143,8 @@ bool CCImage::initWithImageFile(const char * strPath, EImageFormat eImgFmt/* = e
 #else
     unsigned long nSize = 0;
     std::string fullPath = CCFileUtils::sharedFileUtils()->fullPathForFilename(strPath);
-    unsigned char* pBuffer = CCFileUtils::sharedFileUtils()->getFileData(fullPath.c_str(), "rb", &nSize);
+    //unsigned char* pBuffer = CCFileUtils::sharedFileUtils()->getFileData(fullPath.c_str(), "rb", &nSize);
+    unsigned char* pBuffer = CZHelperFunc::getFileData(fullPath.c_str(), "rb", &nSize);
     if (pBuffer != NULL && nSize > 0)
     {
         bRet = initWithImageData(pBuffer, nSize, eImgFmt);
@@ -136,7 +159,13 @@ bool CCImage::initWithImageFileThreadSafe(const char *fullpath, EImageFormat ima
 {
     bool bRet = false;
     unsigned long nSize = 0;
-    unsigned char *pBuffer = CCFileUtils::sharedFileUtils()->getFileData(fullpath, "rb", &nSize);
+#if 0//(CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)
+    CCFileUtilsAndroid *fileUitls = (CCFileUtilsAndroid*)CCFileUtils::sharedFileUtils();
+    unsigned char *pBuffer = fileUitls->getFileDataForAsync(fullpath, "rb", &nSize);
+#else
+    //unsigned char *pBuffer = CCFileUtils::sharedFileUtils()->getFileData(fullpath, "rb", &nSize);
+    unsigned char* pBuffer = CZHelperFunc::getFileData(fullpath, "rb", &nSize);
+#endif
     if (pBuffer != NULL && nSize > 0)
     {
         bRet = initWithImageData(pBuffer, nSize, imageType);
@@ -162,21 +191,33 @@ bool CCImage::initWithImageData(void * pData,
             bRet = _initWithPngData(pData, nDataLen);
             break;
         }
+
+#if CC_JPEG_ENABLED > 0
         else if (kFmtJpg == eFmt)
         {
             bRet = _initWithJpgData(pData, nDataLen);
             break;
         }
+#endif
+
+#if CC_TIFF_ENABLED > 0
         else if (kFmtTiff == eFmt)
         {
             bRet = _initWithTiffData(pData, nDataLen);
             break;
         }
-        else if (kFmtWebp == eFmt)
+#endif // CC_TIFF_ENABLED
+
+#if (CC_TARGET_PLATFORM != CC_PLATFORM_WINRT) && (CC_TARGET_PLATFORM != CC_PLATFORM_WP8)
+#if CC_WEBP_ENABLED > 0
+       else if (kFmtWebp == eFmt)
         {
             bRet = _initWithWebpData(pData, nDataLen);
             break;
         }
+#endif
+#endif
+
         else if (kFmtRawData == eFmt)
         {
             bRet = _initWithRawData(pData, nDataLen, nWidth, nHeight, nBitsPerComponent, false);
@@ -202,6 +243,7 @@ bool CCImage::initWithImageData(void * pData,
                 }
             }
 
+#if CC_TIFF_ENABLED > 0
             // if it is a tiff file buffer.
             if (nDataLen > 2)
             {
@@ -214,8 +256,10 @@ bool CCImage::initWithImageData(void * pData,
                     break;
                 }
             }
+#endif // CC_TIFF_ENABLED
 
             // if it is a jpeg file buffer.
+#if CC_JPEG_ENABLED > 0
             if (nDataLen > 2)
             {
                 unsigned char* pHead = (unsigned char*)pData;
@@ -226,10 +270,12 @@ bool CCImage::initWithImageData(void * pData,
                     break;
                 }
             }
+#endif // CC_JPEG_ENABLED
         }
     } while (0);
     return bRet;
 }
+
 
 /*
  * ERROR HANDLING:
@@ -253,6 +299,8 @@ bool CCImage::initWithImageData(void * pData,
  *
  * Here's the extended error handler struct:
  */
+
+#if CC_JPEG_ENABLED > 0
 
 struct my_error_mgr {
   struct jpeg_error_mgr pub;	/* "public" fields */
@@ -376,6 +424,8 @@ bool CCImage::_initWithJpgData(void * data, int nSize)
     CC_SAFE_DELETE_ARRAY(row_pointer[0]);
     return bRet;
 }
+
+#endif // CC_JPEG_ENABLED
 
 bool CCImage::_initWithPngData(void * pData, int nDatalen)
 {
@@ -503,6 +553,7 @@ bool CCImage::_initWithPngData(void * pData, int nDatalen)
     return bRet;
 }
 
+#if CC_TIFF_ENABLED > 0
 static tmsize_t _tiffReadProc(thandle_t fd, void* buf, tmsize_t size)
 {
     tImageSource* isource = (tImageSource*)fd;
@@ -680,6 +731,8 @@ bool CCImage::_initWithTiffData(void* pData, int nDataLen)
     return bRet;
 }
 
+#endif // CC_TIFF_ENABLED
+
 bool CCImage::_initWithRawData(void * pData, int nDatalen, int nWidth, int nHeight, int nBitsPerComponent, bool bPreMulti)
 {
     bool bRet = false;
@@ -727,10 +780,12 @@ bool CCImage::saveToFile(const char *pszFilePath, bool bIsToRGB)
         {
             CC_BREAK_IF(!_saveImageToPNG(pszFilePath, bIsToRGB));
         }
+#if CC_JPEG_ENABLED > 0
         else if (std::string::npos != strLowerCasePath.find(".jpg"))
         {
             CC_BREAK_IF(!_saveImageToJPG(pszFilePath));
         }
+#endif
         else
         {
             break;
@@ -882,6 +937,8 @@ bool CCImage::_saveImageToPNG(const char * pszFilePath, bool bIsToRGB)
     } while (0);
     return bRet;
 }
+
+#if CC_JPEG_ENABLED > 0
 bool CCImage::_saveImageToJPG(const char * pszFilePath)
 {
     bool bRet = false;
@@ -959,6 +1016,8 @@ bool CCImage::_saveImageToJPG(const char * pszFilePath)
     } while (0);
     return bRet;
 }
+
+#endif // CC_JPEG_ENABLED
 
 NS_CC_END
 

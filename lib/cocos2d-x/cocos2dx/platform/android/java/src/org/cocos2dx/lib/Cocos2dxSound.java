@@ -87,10 +87,10 @@ public class Cocos2dxSound {
         this.mSoundPool.setOnLoadCompleteListener(new OnLoadCompletedListener());
 		
 		this.mLeftVolume = 0.5f;
+		this.simultaneousStreams = simultaneousStreams;
 		this.mRightVolume = 0.5f;
 		
 		this.mSemaphore = new Semaphore(0, true);
-		this.simultaneousStreams = simultaneousStreams;
 	}
 
 	// ===========================================================

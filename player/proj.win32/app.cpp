@@ -4,6 +4,11 @@
 
 #include "stdafx.h"
 #include "app.h"
+#include <io.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <fcntl.h>
+
 #include <Commdlg.h>
 #include <Shlobj.h>
 #include <winnls.h>
@@ -11,13 +16,20 @@
 #include <objbase.h>
 #include <objidl.h>
 #include <shlguid.h>
+#include <shellapi.h>
+
 #include <vector>
+
 #include "CCEGLView.h"
 #include "CCLuaEngine.h"
 #include "CCLuaStack.h"
 #include "SimpleAudioEngine.h"
 #include "ProjectConfigDialog.h"
+#include "Registry.h"
 
+static std::string makeTitleKeyForIndex(int index);
+static std::string makeArgsKeyForIndex(int index);
+static std::vector<std::string> splitString(std::string str,std::string pattern);
 
 int APIENTRY _tWinMain(HINSTANCE hInstance,
     HINSTANCE hPrevInstance,
@@ -61,6 +73,7 @@ QuickXPlayer::QuickXPlayer(void)
 : m_app(NULL)
 , m_hwnd(NULL)
 , m_exit(TRUE)
+, m_writeDebugLogFile(NULL)
 {
     INITCOMMONCONTROLSEX InitCtrls;
     InitCtrls.dwSize = sizeof(InitCtrls);
@@ -74,32 +87,52 @@ int QuickXPlayer::run(void)
     SimulatorConfig::sharedDefaults()->setQuickCocos2dxRootPath(QUICK_COCOS2DX_ROOT);
 
     loadProjectConfig();
-
-    AllocConsole();
-    freopen("CONOUT$", "wt", stdout);
-    freopen("CONOUT$", "wt", stderr);
-
-    // disable close console
-    HWND hwndConsole = GetConsoleWindow();
-    if (hwndConsole != NULL)
+    if (!m_project.getProjectDir().length())
     {
-        HMENU hMenu = GetSystemMenu(hwndConsole, FALSE);
-        if (hMenu != NULL) DeleteMenu(hMenu, SC_CLOSE, MF_BYCOMMAND);
+        m_project.resetToWelcome();
     }
+
+    loadOpenRecents();
+
+    HWND hwndConsole = NULL;
+    if (m_project.isShowConsole())
+    {
+        AllocConsole();
+        freopen("CONOUT$", "wt", stdout);
+        freopen("CONOUT$", "wt", stderr);
+
+        // disable close console
+        hwndConsole = GetConsoleWindow();
+        if (hwndConsole != NULL)
+        {
+            HMENU hMenu = GetSystemMenu(hwndConsole, FALSE);
+            if (hMenu != NULL) DeleteMenu(hMenu, SC_CLOSE, MF_BYCOMMAND);
+
+            ShowWindow(hwndConsole, SW_SHOW);
+            BringWindowToTop(hwndConsole);
+        }
+    }
+
+    if (m_project.isWriteDebugLogToFile())
+    {
+        const string debugLogFilePath = m_project.getDebugLogFilePath();
+        m_writeDebugLogFile = fopen(debugLogFilePath.c_str(), "w");
+        if (!m_writeDebugLogFile)
+        {
+            CCLOG("Cannot create debug log file %s", debugLogFilePath.c_str());
+        }
+    }
+
+    CCNotificationCenter::sharedNotificationCenter()->addObserver(this, callfuncO_selector(QuickXPlayer::onWelcomeNewProject), "WELCOME_NEW_PROJECT", NULL);
+    CCNotificationCenter::sharedNotificationCenter()->addObserver(this, callfuncO_selector(QuickXPlayer::onWelcomeOpen), "WELCOME_OPEN_PROJECT", NULL);
+    CCNotificationCenter::sharedNotificationCenter()->addObserver(this, callfuncO_selector(QuickXPlayer::onWelcomeSamples), "WELCOME_SAMPLES", NULL);
+    CCNotificationCenter::sharedNotificationCenter()->addObserver(this, callfuncO_selector(QuickXPlayer::onWelcomeGetStarted), "WELCOME_OPEN_DOCUMENTS", NULL);
+    CCNotificationCenter::sharedNotificationCenter()->addObserver(this, callfuncO_selector(QuickXPlayer::onWelcomeGetCommunity), "WELCOME_OPEN_COMMUNITY", NULL);
+    CCNotificationCenter::sharedNotificationCenter()->addObserver(this, callfuncO_selector(QuickXPlayer::onWelcomeOpenRecent), "WELCOME_OPEN_PROJECT_ARGS", NULL);
 
     do
     {
         m_exit = TRUE;
-
-        if (m_project.isShowConsole())
-        {
-            ShowWindow(hwndConsole, SW_SHOW);
-            BringWindowToTop(hwndConsole);
-        }
-        else
-        {
-            ShowWindow(hwndConsole, SW_HIDE);
-        }
 
         // create the application instance
         m_app = new AppDelegate();
@@ -131,9 +164,15 @@ int QuickXPlayer::run(void)
         // set icon
         HICON icon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_LUAHOSTWIN32));
         SendMessage(m_hwnd, WM_SETICON, ICON_BIG, (LPARAM)icon);
-        SendMessage(hwndConsole, WM_SETICON, ICON_BIG, (LPARAM)icon);
+
+        if (hwndConsole)
+        {
+            SendMessage(hwndConsole, WM_SETICON, ICON_BIG, (LPARAM)icon);
+        }
 
         // update menu
+        updateOpenRecent();
+        createRecentMenu();
         createViewMenu();
         updateMenu();
 
@@ -145,6 +184,7 @@ int QuickXPlayer::run(void)
             stack->addSearchPath(it->c_str());
         }
 
+        m_app->setOpenRecents(getOpenRecentsForLua());
         m_app->run();
 
         // cleanup
@@ -157,6 +197,7 @@ int QuickXPlayer::run(void)
     } while (!m_exit);
 
     FreeConsole();
+    if (m_writeDebugLogFile) fclose(m_writeDebugLogFile);
     return 0;
 }
 
@@ -171,6 +212,60 @@ void QuickXPlayer::loadProjectConfig(void)
         args.push_back(s);
     }
     m_project.parseCommandLine(args);
+}
+
+void QuickXPlayer::loadOpenRecents(void)
+{
+    CRegistry *reg = new CRegistry(HKEY_CURRENT_USER, "quick-x\\quick-x-player\\recents");
+    string jsonString;
+    reg->ReadStringValue(jsonString);
+    delete reg;
+
+    if (jsonString.length() == 0)
+    {
+        jsonString = "{}";
+    }
+    CCLuaStack *stack = CCLuaEngine::defaultEngine()->getLuaStack();
+    string code("_G[\"OPEN_RECENTS\"] = '");
+    code.append(jsonString);
+    code.append("'");
+    stack->executeString(code.c_str());
+}
+
+void QuickXPlayer::createRecentMenu(void)
+{
+    HMENU menu = GetMenu(m_hwnd);
+    HMENU fileMenu = GetSubMenu(menu, 0);
+    HMENU recentMenu = GetSubMenu(fileMenu, 2);
+
+    CRegistry *reg = new CRegistry(HKEY_CURRENT_USER, "quick-x\\quick-x-player\\recents");
+    string countString;
+    reg->ReadStringValue(countString);
+    int menuCount = atoi(countString.c_str());
+
+    for (int i = menuCount-1; i >= 0; --i)
+    {
+        string title;
+        reg->ReadStringValue(title, makeTitleKeyForIndex(i).c_str());
+
+        string args;
+        reg->ReadStringValue(args, makeArgsKeyForIndex(i).c_str());
+
+        wstring menuName;
+        menuName.assign(title.begin(), title.end());
+
+        MENUITEMINFO item;
+        ZeroMemory(&item, sizeof(item));
+        item.cbSize = sizeof(item);
+        item.fMask = MIIM_FTYPE | MIIM_ID | MIIM_STRING;
+        item.fType = MFT_STRING;
+        item.wID = ID_OPENRECENT_F + i;
+        item.dwTypeData = (LPTSTR)menuName.c_str();
+        item.cch = menuName.length();
+
+        InsertMenuItem(recentMenu, 0, TRUE, &item);
+    }
+    delete reg;
 }
 
 void QuickXPlayer::createViewMenu(void)
@@ -197,9 +292,69 @@ void QuickXPlayer::createViewMenu(void)
     }
 }
 
+void QuickXPlayer::updateOpenRecent(void)
+{
+    stringstream buff;
+    buff << SimulatorConfig::sharedDefaults()->getQuickCocos2dxRootPath();
+    buff << "player\\welcome\\";
+    string welcomeTitle = buff.str();
+    if (welcomeTitle == m_project.getProjectDir()) return;
+
+    CRegistry *reg = new CRegistry(HKEY_CURRENT_USER, "quick-x\\quick-x-player\\recents");
+    string countString;
+    reg->ReadStringValue(countString);
+    int menuCount = atoi(countString.c_str());
+
+    std::vector<string> titleArray;
+    std::vector<string> argsArray;
+
+    string currProjectTitle = m_project.getProjectDir();
+    for (int i = 0; i < menuCount; i++)
+    {
+        string title;
+        reg->ReadStringValue(title, makeTitleKeyForIndex(i).c_str());
+
+        string args;
+        reg->ReadStringValue(args, makeArgsKeyForIndex(i).c_str());
+
+        if ((title.length() >= 0) && (welcomeTitle != title) && (currProjectTitle != title) && (CCFileUtils::sharedFileUtils()->isDirectoryExist(title)))
+        {
+            titleArray.push_back(title);
+            argsArray.push_back(args);
+        }
+    }
+
+    titleArray.insert(titleArray.begin(), m_project.getProjectDir());
+    argsArray.insert(argsArray.begin(), m_project.makeCommandLine());
+    for (size_t i = 0; i < titleArray.size(); i++)
+    {
+        reg->WriteStringValue(titleArray.at(i).c_str(), makeTitleKeyForIndex(i).c_str());
+        reg->WriteStringValue(argsArray.at(i).c_str(),  makeArgsKeyForIndex(i).c_str());
+    }
+
+    {
+        stringstream buff;
+        buff << titleArray.size();
+        reg->WriteStringValue(buff.str().c_str());
+    }
+
+    delete reg;
+}
+
 void QuickXPlayer::updateMenu(void)
 {
     HMENU menu = GetMenu(m_hwnd);
+    HMENU fileMenu = GetSubMenu(menu, 0);
+
+    if (m_project.getDebuggerType() == kCCLuaDebuggerNone)
+    {
+        CheckMenuItem(fileMenu, ID_FILE_AUTO_CONNECT_DEBUGGER, MF_BYCOMMAND | MF_UNCHECKED);
+    }
+    else
+    {
+        CheckMenuItem(fileMenu, ID_FILE_AUTO_CONNECT_DEBUGGER, MF_BYCOMMAND | MF_CHECKED);
+    }
+
     HMENU viewMenu = GetSubMenu(menu, 1);
 
     if (m_project.isLandscapeFrame())
@@ -235,13 +390,130 @@ void QuickXPlayer::updateWindowTitle(void)
 {
 }
 
+void QuickXPlayer::saveRecents(void)
+{
+    this->updateOpenRecent();
+}
+
+void QuickXPlayer::clearRecents(void)
+{
+    HMENU menu = GetMenu(m_hwnd);
+    HMENU fileMenu = GetSubMenu(menu, 0);
+    HMENU recentMenu = GetSubMenu(fileMenu, 2);
+
+    CRegistry *reg = new CRegistry(HKEY_CURRENT_USER, "quick-x\\quick-x-player\\recents");
+    string countString;
+    reg->ReadStringValue(countString);
+    int menuCount = atoi(countString.c_str());
+
+    for (int i = 0; i < menuCount; i++)
+    {
+        RemoveMenu(recentMenu, 0, MF_BYPOSITION);
+    }
+    DrawMenuBar(m_hwnd);
+    reg->WriteStringValue("0");
+    delete reg;
+}
+
+void QuickXPlayer::relaunch(string &commandLine)
+{
+    saveRecents();
+
+    TCHAR moduleName[MAX_PATH];
+    ZeroMemory(moduleName, sizeof(moduleName));
+    GetModuleFileName(NULL, moduleName, MAX_PATH);
+
+    wstring ws;
+    ws.append(L"\"");
+    ws.append(moduleName);
+    ws.append(L"\" ");
+    ws.append(commandLine.begin(), commandLine.end());
+
+    STARTUPINFO si = {0};
+    PROCESS_INFORMATION pi = {0};
+    lstrcpyW(moduleName, ws.c_str());
+    if (CreateProcess(NULL, moduleName, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS, NULL, NULL, &si, &pi))
+    {
+        ExitProcess(0);
+    }
+}
+
 void QuickXPlayer::relaunch(void)
 {
-    RECT rect;
-    GetWindowRect(m_hwnd, &rect);
-    m_project.setWindowOffset(CCPoint(rect.left, rect.top));
-    m_exit = false;
-    CCDirector::sharedDirector()->end();
+    string commandLine = m_project.makeCommandLine(kProjectConfigAll);
+    relaunch(commandLine);
+}
+
+CCLuaValueArray QuickXPlayer::getOpenRecentsForLua(void)
+{
+    CCLuaValueArray ret;
+    
+    CRegistry *reg = new CRegistry(HKEY_CURRENT_USER, "quick-x\\quick-x-player\\recents");
+    string countString;
+    reg->ReadStringValue(countString);
+    int menuCount = atoi(countString.c_str());
+
+    for (int i =0; i < menuCount; ++i)
+    {
+        string title;
+        reg->ReadStringValue(title, makeTitleKeyForIndex(i).c_str());
+        ret.push_back(CCLuaValue::stringValue(title));
+    }
+    delete reg;
+
+    return ret;
+}
+
+void QuickXPlayer::writeDebugLog(const char *log)
+{
+    if (!m_writeDebugLogFile) return;
+
+    fputs(log, m_writeDebugLogFile);
+    fputc('\n', m_writeDebugLogFile);
+    fflush(m_writeDebugLogFile);
+}
+
+// welcome callback
+void QuickXPlayer::onWelcomeNewProject(CCObject *object)
+{
+    MessageBox(m_hwnd, L"Coming soon :-)", L"quick-x-player", MB_OK);
+}
+
+void QuickXPlayer::onWelcomeOpen(CCObject *object)
+{
+    onFileOpenProject();
+}
+
+void QuickXPlayer::onWelcomeSamples(CCObject *object)
+{
+    ShellExecuteA(NULL, "open", SimulatorConfig::sharedDefaults()->getQuickCocos2dxRootPath().c_str(), NULL, NULL, SW_SHOWNORMAL);
+}
+
+void QuickXPlayer::onWelcomeGetStarted(CCObject *object)
+{
+    ShellExecuteA(NULL, "open", "http://cn.cocos2d-x.org/tutorial/index?type=quick-cocos2d-x", NULL, NULL, SW_SHOWNORMAL);
+}
+
+void QuickXPlayer::onWelcomeGetCommunity(CCObject *object)
+{
+    ShellExecuteA(NULL, "open", "http://www.cocoachina.com/bbs/thread.php?fid=56", NULL, NULL, SW_SHOWNORMAL);
+}
+
+void QuickXPlayer::onWelcomeOpenRecent(CCObject *object)
+{
+    CCString *data = dynamic_cast<CCString*> (object);
+    if (data)
+    {
+        m_project.parseCommandLine(splitString(string(data->getCString()), ","));
+        string commandLine = m_project.makeCommandLine();
+        relaunch(commandLine);
+    }
+
+    CCInteger *intData = dynamic_cast<CCInteger*> (object);
+    if (intData)
+    {
+        onOpenRecent(ID_OPENRECENT_F + intData->getValue());
+    }
 }
 
 // menu callback
@@ -251,10 +523,29 @@ void QuickXPlayer::onFileNewProject(void)
 
 void QuickXPlayer::onFileOpenProject(void)
 {
-    if (ProjectConfigDialog::showModal(m_hwnd, &m_project))
+    ProjectConfig project;
+    if (!m_project.isWelcome())
     {
+        project = m_project;
+    }
+    if (ProjectConfigDialog::showModal(m_hwnd, &project))
+    {
+        m_project = project;
         relaunch();
     }
+}
+
+void QuickXPlayer::onFileAutoConnectDebugger(void)
+{
+    if (m_project.getDebuggerType() == kCCLuaDebuggerNone)
+    {
+        m_project.setDebuggerType(kCCLuaDebuggerLDT);
+    }
+    else
+    {
+        m_project.setDebuggerType(kCCLuaDebuggerNone);
+    }
+    updateMenu();
 }
 
 void QuickXPlayer::onFileCreateProjectShortcut(void)
@@ -323,9 +614,20 @@ void QuickXPlayer::onFileRelaunch(void)
     relaunch();
 }
 
+void QuickXPlayer::onFileWelcome(void)
+{
+    m_project.resetToWelcome();
+    relaunch();
+}
+
 void QuickXPlayer::onFileExit(void)
 {
     DestroyWindow(m_hwnd);
+}
+
+void QuickXPlayer::onFileRecentClear(void)
+{
+    clearRecents();
 }
 
 void QuickXPlayer::onViewChangeFrameSize(int viewMenuID)
@@ -383,6 +685,32 @@ void QuickXPlayer::onViewChangeZoom(int scaleMode)
     updateMenu();
 }
 
+void QuickXPlayer::onOpenRecent(int recentID)
+{
+    int index = recentID - ID_OPENRECENT_F;
+
+    CRegistry *reg = new CRegistry(HKEY_CURRENT_USER, "quick-x\\quick-x-player\\recents");
+    string countString;
+    reg->ReadStringValue(countString);
+    int menuCount = atoi(countString.c_str());
+
+    for (int i = menuCount-1; i >= 0; --i)
+    {
+        if (index == i)
+        {
+            string title;
+            reg->ReadStringValue(title, makeTitleKeyForIndex(i).c_str());
+
+            string args;
+            reg->ReadStringValue(args, makeArgsKeyForIndex(i).c_str());
+
+            relaunch(args);
+            break;
+        }
+    }
+    delete reg;
+}
+
 void QuickXPlayer::onHelpAbout(void)
 {
     DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_ABOUTBOX), m_hwnd, AboutDialogCallback);
@@ -411,6 +739,10 @@ LRESULT QuickXPlayer::WindowProc(UINT message, WPARAM wParam, LPARAM lParam, BOO
             host->onFileOpenProject();
             break;
 
+        case ID_FILE_AUTO_CONNECT_DEBUGGER:
+            host->onFileAutoConnectDebugger();
+            break;
+
         case ID_FILE_CREATE_PROJECT_SHORTCUT:
             host->onFileCreateProjectShortcut();
             break;
@@ -421,6 +753,14 @@ LRESULT QuickXPlayer::WindowProc(UINT message, WPARAM wParam, LPARAM lParam, BOO
 
         case ID_FILE_RELAUNCH:
             host->onFileRelaunch();
+            break;
+
+        case ID_FILE_WELCOME:
+            host->onFileWelcome();
+            break;
+
+        case ID_OPENRECENT_CLEAR:
+            host->onFileRecentClear();
             break;
 
         case ID_FILE_EXIT:
@@ -447,6 +787,11 @@ LRESULT QuickXPlayer::WindowProc(UINT message, WPARAM wParam, LPARAM lParam, BOO
                 host->onViewChangeFrameSize(wmId);
                 break;
             }
+            else if (wmId >= ID_OPENRECENT_F && wmId < ID_OPENRECENT_CLEAR)
+            {
+                host->onOpenRecent(wmId);
+                break;
+            }
 
             return 0;
         }
@@ -458,6 +803,17 @@ LRESULT QuickXPlayer::WindowProc(UINT message, WPARAM wParam, LPARAM lParam, BOO
             host->onFileRelaunch();
         }
         break;
+
+    case WM_COPYDATA:
+        {
+            PCOPYDATASTRUCT pMyCDS = (PCOPYDATASTRUCT) lParam;
+            if (pMyCDS->dwData == CCLOG_STRING)
+            {
+                const char *szBuf = (const char*)(pMyCDS->lpData);
+                sharedInstance()->writeDebugLog(szBuf);
+                break;
+            }
+        }
 
     default:
         return 0;
@@ -484,4 +840,40 @@ INT_PTR CALLBACK QuickXPlayer::AboutDialogCallback(HWND hDlg, UINT message, WPAR
         break;
     }
     return (INT_PTR)FALSE;
+}
+
+
+///// helper /////
+static std::string makeTitleKeyForIndex(int index)
+{
+    stringstream buff;
+    buff << "m" << index << "_title";
+    return buff.str();
+}
+
+static std::string makeArgsKeyForIndex(int index)
+{
+    stringstream buff;
+    buff << "m" << index << "_args";
+    return buff.str();
+}
+
+static std::vector<std::string> splitString(std::string str, std::string pattern)
+{
+    std::string::size_type        pos;
+    std::vector<std::string>    result;
+    str += pattern;
+    int size = str.size();
+
+    for(int i = 0; i < size; i++)
+    {
+        pos = str.find(pattern,i);
+        if(pos < size)
+        {
+            std::string s = str.substr(i, pos-i);
+            result.push_back(s);
+            i = pos + pattern.size() - 1;
+        }
+    }
+    return result;
 }

@@ -1,8 +1,6 @@
 --[[
 
-Copyright (c) 2011-2012 qeeplay.com
-
-http://dualface.github.com/quick-cocos2d-x/
+Copyright (c) 2011-2014 chukong-inc.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -26,87 +24,24 @@ THE SOFTWARE.
 
 --[[--
 
-Call Objective-C form Lua, and call Lua from Objective-C.
-
--   Call Objective-C Class Static Method from Lua
--   Pass aruments to Objective-C
--   Pass Lua function to Objective-C
--   Call Lua function from Objective-C
-
-## HOW TO USE:
-
-~~~
-
-local function onLogin(result)
-    if result == "ok" then
-        print("login ok")
-    else
-        print("login failure, error message = ", result)
-    end
-end
-
-local args = {
-    username  = "dualface",
-    password  = "123456",
-    autologin = true,
-    callback  = onLogin
-}
-local ok, ret = luaoc.callStaticMethod("MySDK", "login", args)
-if ok then
-    -- call success
-    print("ret = ", ret)
-else
-    -- call failure
-    print("error code = ", ret)
-end
-~~~
-
-### Objective-C method:
-
-~~~ .objectivec
-#include "CCLuaObjcBridge.h"
-
-+ (NSString *)login:(NSDictionary *)dict
-{
-    NSString *username = [dict objectForKey:@"username"];
-    NSString *password = [dict objectForKey:@"password"];
-    BOOL autologin = [[dict objectForKey:@"autologin"] boolValue];
-    int callback = [[dict objectForKey:@"callback"] intValue];
-
-    if (.....)
-    {
-        CCLuaObjcBridge::callLuaFunctionById(callback, "ok");
-    }
-    else
-    {
-        CCLuaObjcBridge::callLuaFunctionById(callback, "error message");
-    }
-    CCLuaObjcBridge::releaseLuaFunctionById(callback);
-
-    return @"something";
-}
-~~~
+Lua 与 Objective-C 的交互接口
 
 ]]
-
 local luaoc = {}
 
 local callStaticMethod = CCLuaObjcBridge.callStaticMethod
 
 --[[--
 
-Call Objective-C Class Method
+调用Object-C类的接口。
 
-### Parameters:
+只能调用Object-C类的类方法
 
--   string **className** Objective-C class name
--   string **methodName** Method name
--   [_optional table **args**_] Arguments pass to Objective-C
+@param string className Object-C类名
+@param string methodName Object-C类方法名
+@param table args Object-C类方法所需要的各种参数字典,key值为方法的参数名
 
-### Returns:
-
--   boolean call success or failure
--   mixed Objective-C method returned value
+@return boolean ok, mixed ret ok为是否调用成功, ok为true时,ret为java方法的返回值,ok为false时,ret为出错原因
 
 ]]
 function luaoc.callStaticMethod(className, methodName, args)
@@ -115,17 +50,17 @@ function luaoc.callStaticMethod(className, methodName, args)
         local msg = string.format("luaoc.callStaticMethod(\"%s\", \"%s\", \"%s\") - error: [%s] ",
                 className, methodName, tostring(args), tostring(ret))
         if ret == -1 then
-            echoError(msg .. "INVALID PARAMETERS")
+            printError(msg .. "INVALID PARAMETERS")
         elseif ret == -2 then
-            echoError(msg .. "CLASS NOT FOUND")
+            printError(msg .. "CLASS NOT FOUND")
         elseif ret == -3 then
-            echoError(msg .. "METHOD NOT FOUND")
+            printError(msg .. "METHOD NOT FOUND")
         elseif ret == -4 then
-            echoError(msg .. "EXCEPTION OCCURRED")
+            printError(msg .. "EXCEPTION OCCURRED")
         elseif ret == -5 then
-            echoError(msg .. "INVALID METHOD SIGNATURE")
+            printError(msg .. "INVALID METHOD SIGNATURE")
         else
-            echoError(msg .. "UNKNOWN")
+            printError(msg .. "UNKNOWN")
         end
     end
     return ok, ret

@@ -27,11 +27,13 @@
  *
  */
 
+
 /** CCDrawNode
  Node that draws dots, segments and polygons.
  Faster than the "drawing primitives" since they it draws everything in one single batch.
 
  @since v2.1
+ @lua NA
  */
 class CCDrawNode : public CCNode
 {
@@ -43,12 +45,27 @@ class CCDrawNode : public CCNode
     /** draw a segment with a radius and color */
     void drawSegment(CCPoint from, CCPoint to, float radius, ccColor4F color);
 
-    /** draw a polygon with a fill color and line color */
-    void drawPolygon(CCPointArray *verts, ccColor4F fillColor, float borderWidth, ccColor4F borderColor);
+    /** draw a polygon with a fill color and line color
+     * @code
+     * when this funciton bound to js,the input params are changed
+     * js:var drawPolygon(var verts, var fillColor,var borderWidth,var borderColor)
+     * @endcode
+     */
+    void drawPolygon(CCPoint *verts, unsigned int count, ccColor4F fillColor, float borderWidth, ccColor4F borderColor);
 
     /** Clear the geometry in the node's buffer. */
     void clear();
 
+    /**
+     * @js NA
+     */
     ccBlendFunc getBlendFunc();
+
+    /**
+     * @code
+     * when this function bound to js ,the input param is change
+     * js:var setBlendFunc(var src,var dst)
+     * @endcode
+     */
     void setBlendFunc(ccBlendFunc blendFunc);
 };

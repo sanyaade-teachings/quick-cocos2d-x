@@ -40,6 +40,7 @@ THE SOFTWARE.
 #include "effects/CCGrid.h"
 // extern
 #include "kazmath/GL/matrix.h"
+#include "CCEGLView.h"
 
 NS_CC_BEGIN
 
@@ -69,7 +70,7 @@ CCRenderTexture::CCRenderTexture()
     
     CCNotificationCenter::sharedNotificationCenter()->addObserver(this,
                                                                   callfuncO_selector(CCRenderTexture::listenToForeground),
-                                                                  EVNET_COME_TO_FOREGROUND, // this is misspelt
+                                                                  EVENT_COME_TO_FOREGROUND, // this is misspelt
                                                                   NULL);
 #endif
 }
@@ -88,7 +89,7 @@ CCRenderTexture::~CCRenderTexture()
 
 #if CC_ENABLE_CACHE_TEXTURE_DATA
     CCNotificationCenter::sharedNotificationCenter()->removeObserver(this, EVENT_COME_TO_BACKGROUND);
-    CCNotificationCenter::sharedNotificationCenter()->removeObserver(this, EVNET_COME_TO_FOREGROUND);
+    CCNotificationCenter::sharedNotificationCenter()->removeObserver(this, EVENT_COME_TO_FOREGROUND);
 #endif
 }
 
@@ -271,8 +272,8 @@ bool CCRenderTexture::initWithWidthAndHeight(int w, int h, CCTexture2DPixelForma
         }
         else
         {
-            powW = ccNextPOT(w);
-            powH = ccNextPOT(h);
+            powW = (unsigned int)ccNextPOT(w);
+            powH = (unsigned int)ccNextPOT(h);
         }
 
         data = malloc((int)(powW * powH * 4));
@@ -368,6 +369,15 @@ void CCRenderTexture::begin()
     
     CCDirector *director = CCDirector::sharedDirector();
     director->setProjection(director->getProjection());
+
+#if CC_TARGET_PLATFORM == CC_PLATFORM_WP8
+    kmMat4 modifiedProjection;
+    kmGLGetMatrix(KM_GL_PROJECTION, &modifiedProjection);
+    kmMat4Multiply(&modifiedProjection, CCEGLView::sharedOpenGLView()->getReverseOrientationMatrix(), &modifiedProjection);
+    kmGLMatrixMode(KM_GL_PROJECTION);
+    kmGLLoadMatrix(&modifiedProjection);
+    kmGLMatrixMode(KM_GL_MODELVIEW);
+#endif
 
     const CCSize& texSize = m_pTexture->getContentSizeInPixels();
 
@@ -510,6 +520,8 @@ void CCRenderTexture::clearStencil(int stencilValue)
 
 void CCRenderTexture::visit()
 {
+    m_drawOrder = ++g_drawOrder;
+
     // override visit.
 	// Don't call visit on its children
     if (!m_bVisible)
@@ -529,14 +541,15 @@ void CCRenderTexture::visit()
     m_pSprite->visit();
     draw();
 	
+    // reset for next frame
+    m_uOrderOfArrival = 0;
+
     if (m_pGrid && m_pGrid->isActive())
     {
         m_pGrid->afterDraw(this);
     }
 	
 	kmGLPopMatrix();
-
-    m_uOrderOfArrival = 0;
 }
 
 void CCRenderTexture::draw()
@@ -613,16 +626,16 @@ bool CCRenderTexture::saveToFile(const char *szFilePath)
     CCImage *pImage = newCCImage(true);
     if (pImage)
     {
-        bRet = pImage->saveToFile(szFilePath, kCCImageFormatJPEG);
+        bRet = pImage->saveToFile(szFilePath, kFmtJpg);
     }
 
     CC_SAFE_DELETE(pImage);
     return bRet;
 }
-bool CCRenderTexture::saveToFile(const char *fileName, tCCImageFormat format)
+bool CCRenderTexture::saveToFile(const char *fileName, EImageFormat format)
 {
     bool bRet = false;
-    CCAssert(format == kCCImageFormatJPEG || format == kCCImageFormatPNG,
+    CCAssert(format == kFmtJpg || format == kFmtPng,
              "the image can only be saved as JPG or PNG format");
 
     CCImage *pImage = newCCImage(true);
@@ -687,11 +700,11 @@ CCImage* CCRenderTexture::newCCImage(bool flipImage)
                        nSavedBufferWidth * 4);
             }
 
-            pImage->initWithImageData(pBuffer, nSavedBufferWidth * nSavedBufferHeight * 4, CCImage::kFmtRawData, nSavedBufferWidth, nSavedBufferHeight, 8);
+            pImage->initWithImageData(pBuffer, nSavedBufferWidth * nSavedBufferHeight * 4, kFmtRawData, nSavedBufferWidth, nSavedBufferHeight, 8);
         }
         else
         {
-            pImage->initWithImageData(pTempData, nSavedBufferWidth * nSavedBufferHeight * 4, CCImage::kFmtRawData, nSavedBufferWidth, nSavedBufferHeight, 8);
+            pImage->initWithImageData(pTempData, nSavedBufferWidth * nSavedBufferHeight * 4, kFmtRawData, nSavedBufferWidth, nSavedBufferHeight, 8);
         }
         
     } while (0);

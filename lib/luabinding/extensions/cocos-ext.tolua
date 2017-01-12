@@ -1,10 +1,9 @@
 
 $#include "cocos-ext.h"
-$#include "AssetsManager/AssetsManager.h"
 
 $using namespace cocos2d::extension;
+$using namespace std;
 
-$pfile "extensions/AssetsManager/AssetsManager.tolua"
 $pfile "extensions/GUI/CCControlExtension/CCControl.tolua"
 $pfile "extensions/GUI/CCControlExtension/CCControlButton.tolua"
 $pfile "extensions/GUI/CCControlExtension/CCControlColourPicker.tolua"
@@ -18,3 +17,5 @@ $pfile "extensions/GUI/CCControlExtension/CCControlUtils.tolua"
 $pfile "extensions/GUI/CCControlExtension/CCScale9Sprite.tolua"
 
 $pfile "extensions/GUI/CCEditBox/CCEditBox.tolua"
+$pfile "extensions/GUI/CCScrollView/CCScrollView.tolua"
+$pfile "extensions/GUI/CCScrollView/CCTableView.tolua"

@@ -1,29 +1,29 @@
 /****************************************************************************
-Copyright (c) 2010-2012 cocos2d-x.org
-Copyright (c) 2008-2010 Ricardo Quesada
-Copyright (c) 2009      Valentin Milea
-Copyright (c) 2011      Zynga Inc.
+ Copyright (c) 2010-2012 cocos2d-x.org
+ Copyright (c) 2008-2010 Ricardo Quesada
+ Copyright (c) 2009      Valentin Milea
+ Copyright (c) 2011      Zynga Inc.
 
-http://www.cocos2d-x.org
+ http://www.cocos2d-x.org
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included in
+ all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-****************************************************************************/
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ THE SOFTWARE.
+ ****************************************************************************/
 #include "cocoa/CCString.h"
 #include "CCNode.h"
 #include "support/CCPointExtension.h"
@@ -33,9 +33,11 @@ THE SOFTWARE.
 #include "CCDirector.h"
 #include "CCScheduler.h"
 #include "touch_dispatcher/CCTouch.h"
+#include "touch_dispatcher/CCTouchDispatcher.h"
 #include "actions/CCActionManager.h"
 #include "script_support/CCScriptSupport.h"
 #include "shaders/CCGLProgram.h"
+#include "layers_scenes_transitions_nodes/CCScene.h"
 // externals
 #include "kazmath/GL/matrix.h"
 #include "support/component/CCComponent.h"
@@ -51,6 +53,8 @@ NS_CC_BEGIN
 
 // XXX: Yes, nodes might have a sort problem once every 15 days if the game runs at 60 FPS and each frame sprites are reordered.
 static int s_globalOrderOfArrival = 1;
+
+unsigned int CCNode::g_drawOrder = 0;
 
 CCNode::CCNode(void)
 : m_fRotationX(0.0f)
@@ -87,9 +91,21 @@ CCNode::CCNode(void)
 , m_bVisible(true)
 , m_bIgnoreAnchorPointForPosition(false)
 , m_bReorderChildDirty(false)
-, m_nScriptHandler(0)
-, m_nUpdateScriptHandler(0)
 , m_pComponentContainer(NULL)
+// merge CCNodeRGBA
+, m_displayedOpacity(255)
+, m_realOpacity(255)
+, m_isOpacityModifyRGB(false)
+, m_displayedColor(ccWHITE)
+, m_realColor(ccWHITE)
+, m_cascadeColorEnabled(false)
+, m_cascadeOpacityEnabled(false)
+, m_drawOrder(0)
+// touch
+, m_bTouchCaptureEnabled(true)
+, m_bTouchSwallowEnabled(true)
+, m_bTouchEnabled(false)
+, m_eTouchMode(kCCTouchesOneByOne)
 {
     // set default scheduler and actionManager
     CCDirector *director = CCDirector::sharedDirector();
@@ -97,21 +113,12 @@ CCNode::CCNode(void)
     m_pActionManager->retain();
     m_pScheduler = director->getScheduler();
     m_pScheduler->retain();
-
-    CCScriptEngineProtocol* pEngine = CCScriptEngineManager::sharedManager()->getScriptEngine();
-    m_eScriptType = pEngine != NULL ? pEngine->getScriptType() : kScriptTypeNone;
     m_pComponentContainer = new CCComponentContainer(this);
 }
 
 CCNode::~CCNode(void)
 {
     CCLOGINFO( "cocos2d: deallocing" );
-    
-    unregisterScriptHandler();
-    if (m_nUpdateScriptHandler)
-    {
-        CCScriptEngineManager::sharedManager()->getScriptEngine()->removeScriptHandler(m_nUpdateScriptHandler);
-    }
 
     CC_SAFE_RELEASE(m_pActionManager);
     CC_SAFE_RELEASE(m_pScheduler);
@@ -121,6 +128,10 @@ CCNode::~CCNode(void)
     CC_SAFE_RELEASE(m_pGrid);
     CC_SAFE_RELEASE(m_pShaderProgram);
     CC_SAFE_RELEASE(m_pUserObject);
+
+    // m_pComsContainer
+    m_pComponentContainer->removeAll();
+    CC_SAFE_DELETE(m_pComponentContainer);
 
     if(m_pChildren && m_pChildren->count() > 0)
     {
@@ -137,10 +148,6 @@ CCNode::~CCNode(void)
 
     // children
     CC_SAFE_RELEASE(m_pChildren);
-    
-          // m_pComsContainer
-    m_pComponentContainer->removeAll();
-    CC_SAFE_DELETE(m_pComponentContainer);
 }
 
 bool CCNode::init()
@@ -178,7 +185,7 @@ int CCNode::getZOrder()
 }
 
 /// zOrder setter : private method
-/// used internally to alter the zOrder variable. DON'T call this method manually 
+/// used internally to alter the zOrder variable. DON'T call this method manually
 void CCNode::_setZOrder(int z)
 {
     m_nZOrder = z;
@@ -254,6 +261,14 @@ float CCNode::getScale(void)
 void CCNode::setScale(float scale)
 {
     m_fScaleX = m_fScaleY = scale;
+    m_bTransformDirty = m_bInverseDirty = true;
+}
+
+/// scale setter
+void CCNode::setScale(float fScaleX,float fScaleY)
+{
+    m_fScaleX = fScaleX;
+    m_fScaleY = fScaleY;
     m_bTransformDirty = m_bInverseDirty = true;
 }
 
@@ -345,7 +360,7 @@ CCCamera* CCNode::getCamera()
     {
         m_pCamera = new CCCamera();
     }
-    
+
     return m_pCamera;
 }
 
@@ -429,6 +444,18 @@ CCNode * CCNode::getParent()
 /// parent setter
 void CCNode::setParent(CCNode * var)
 {
+    if (var == NULL)
+    {
+        if (m_bTouchEnabled)
+        {
+            CCScene *scene = getScene();
+            if (scene)
+            {
+                scene->removeTouchableNode(this);
+            }
+            m_bTouchEnabled = false;
+        }
+    }
     m_pParent = var;
 }
 
@@ -440,7 +467,7 @@ bool CCNode::isIgnoreAnchorPointForPosition()
 /// isRelativeAnchorPoint setter
 void CCNode::ignoreAnchorPointForPosition(bool newValue)
 {
-    if (newValue != m_bIgnoreAnchorPointForPosition) 
+    if (newValue != m_bIgnoreAnchorPointForPosition)
     {
 		m_bIgnoreAnchorPointForPosition = newValue;
 		m_bTransformDirty = m_bInverseDirty = true;
@@ -503,22 +530,83 @@ void CCNode::setGLServerState(ccGLServerState glServerState)
 
 void CCNode::setUserObject(CCObject *pUserObject)
 {
-    CC_SAFE_RELEASE(m_pUserObject);
     CC_SAFE_RETAIN(pUserObject);
+    CC_SAFE_RELEASE(m_pUserObject);
     m_pUserObject = pUserObject;
 }
 
 void CCNode::setShaderProgram(CCGLProgram *pShaderProgram)
 {
+    CC_SAFE_RETAIN(pShaderProgram);
     CC_SAFE_RELEASE(m_pShaderProgram);
     m_pShaderProgram = pShaderProgram;
-    CC_SAFE_RETAIN(m_pShaderProgram);
 }
 
 CCRect CCNode::boundingBox()
 {
     CCRect rect = CCRectMake(0, 0, m_obContentSize.width, m_obContentSize.height);
     return CCRectApplyAffineTransform(rect, nodeToParentTransform());
+}
+
+CCRect CCNode::getCascadeBoundingBox(void)
+{
+    CCRect cbb;
+    if (m_cascadeBoundingBox.size.width > 0 && m_cascadeBoundingBox.size.height > 0)
+    {
+        // if cascade bounding box set by user, ignore all childrens bounding box
+        cbb = m_cascadeBoundingBox;
+    }
+    else
+    {
+        // check all childrens bounding box, get maximize box
+        CCObject *object = NULL;
+        CCNode* child = NULL;
+        bool merge = false;
+        CCARRAY_FOREACH(m_pChildren, object)
+        {
+            child = dynamic_cast<CCNode*>(object);
+            if (!child->isVisible()) continue;
+
+            const CCRect box = child->getCascadeBoundingBox();
+            if (box.size.width <= 0 || box.size.height <= 0) continue;
+
+            if (!merge)
+            {
+                cbb = box;
+                merge = true;
+            }
+            else
+            {
+                cbb.merge(box);
+            }
+        }
+
+        // merge content size
+        if (m_obContentSize.width > 0 && m_obContentSize.height > 0)
+        {
+            const CCRect box = CCRectApplyAffineTransform(CCRect(0, 0, m_obContentSize.width, m_obContentSize.height), nodeToWorldTransform());
+            if (!merge)
+            {
+                cbb = box;
+            }
+            else
+            {
+                cbb.merge(box);
+            }
+        }
+    }
+
+    return cbb;
+}
+
+void CCNode::setCascadeBoundingBox(const cocos2d::CCRect &boundingBox)
+{
+    m_cascadeBoundingBox = boundingBox;
+}
+
+void CCNode::resetCascadeBoundingBox(void)
+{
+    m_cascadeBoundingBox = CCRectZero;
 }
 
 CCNode * CCNode::create(void)
@@ -540,16 +628,15 @@ void CCNode::cleanup()
     // actions
     this->stopAllActions();
     this->unscheduleAllSelectors();
-    
-    if ( m_eScriptType != kScriptTypeNone)
+
+    // timers
+    arrayMakeObjectsPerformSelector(m_pChildren, cleanup, CCNode*);
+
+    if (m_scriptEventListeners)
     {
         CCScriptEngineManager::sharedManager()->getScriptEngine()->executeNodeEvent(this, kCCNodeOnCleanup);
     }
-    
-    // timers
-    arrayMakeObjectsPerformSelector(m_pChildren, cleanup, CCNode*);
 }
-
 
 const char* CCNode::description()
 {
@@ -581,11 +668,11 @@ CCNode* CCNode::getChildByTag(int aTag)
 }
 
 /* "add" logic MUST only be on this method
-* If a class want's to extend the 'addChild' behavior it only needs
-* to override this method
-*/
+ * If a class want's to extend the 'addChild' behavior it only needs
+ * to override this method
+ */
 void CCNode::addChild(CCNode *child, int zOrder, int tag)
-{    
+{
     CCAssert( child != NULL, "Argument must be non-nil");
     CCAssert( child->m_pParent == NULL, "child already added. It can't be added again");
 
@@ -620,6 +707,11 @@ void CCNode::addChild(CCNode *child)
     this->addChild(child, child->m_nZOrder, child->m_nTag);
 }
 
+void CCNode::removeSelf()
+{
+    this->removeFromParentAndCleanup(true);
+}
+
 void CCNode::removeFromParent()
 {
     this->removeFromParentAndCleanup(true);
@@ -630,7 +722,7 @@ void CCNode::removeFromParentAndCleanup(bool cleanup)
     if (m_pParent != NULL)
     {
         m_pParent->removeChild(this,cleanup);
-    } 
+    }
 }
 
 void CCNode::removeChild(CCNode* child)
@@ -639,9 +731,9 @@ void CCNode::removeChild(CCNode* child)
 }
 
 /* "remove" logic MUST only be on this method
-* If a class want's to extend the 'removeChild' behavior it only needs
-* to override this method
-*/
+ * If a class want's to extend the 'removeChild' behavior it only needs
+ * to override this method
+ */
 void CCNode::removeChild(CCNode* child, bool cleanup)
 {
     // explicit nil handling
@@ -710,10 +802,10 @@ void CCNode::removeAllChildrenWithCleanup(bool cleanup)
                 pNode->setParent(NULL);
             }
         }
-        
+
         m_pChildren->removeAllObjects();
     }
-    
+
 }
 
 void CCNode::detachChild(CCNode *child, bool doCleanup)
@@ -787,16 +879,17 @@ void CCNode::sortAllChildren()
 }
 
 
- void CCNode::draw()
- {
-     //CCAssert(0);
-     // override me
-     // Only use- this function to draw your stuff.
-     // DON'T draw your stuff outside this method
- }
+void CCNode::draw()
+{
+    //CCAssert(0);
+    // override me
+    // Only use- this function to draw your stuff.
+    // DON'T draw your stuff outside this method
+}
 
 void CCNode::visit()
 {
+    m_drawOrder = ++g_drawOrder;
     // quick return if not visible. children won't be drawn.
     if (!m_bVisible)
     {
@@ -804,10 +897,10 @@ void CCNode::visit()
     }
     kmGLPushMatrix();
 
-     if (m_pGrid && m_pGrid->isActive())
-     {
-         m_pGrid->beforeDraw();
-     }
+    if (m_pGrid && m_pGrid->isActive())
+    {
+        m_pGrid->beforeDraw();
+    }
 
     this->transform();
 
@@ -823,7 +916,7 @@ void CCNode::visit()
         {
             pNode = (CCNode*) arrayData->arr[i];
 
-            if ( pNode && pNode->m_nZOrder < 0 ) 
+            if ( pNode && pNode->m_nZOrder < 0 )
             {
                 pNode->visit();
             }
@@ -842,7 +935,7 @@ void CCNode::visit()
             {
                 pNode->visit();
             }
-        }        
+        }
     }
     else
     {
@@ -852,11 +945,11 @@ void CCNode::visit()
     // reset for next frame
     m_uOrderOfArrival = 0;
 
-     if (m_pGrid && m_pGrid->isActive())
-     {
-         m_pGrid->afterDraw(this);
+    if (m_pGrid && m_pGrid->isActive())
+    {
+        m_pGrid->afterDraw(this);
     }
- 
+
     kmGLPopMatrix();
 }
 
@@ -870,7 +963,7 @@ void CCNode::transformAncestors()
 }
 
 void CCNode::transform()
-{    
+{
     kmMat4 transfrom4x4;
 
     // Convert 3x3 into 4x4 matrix
@@ -902,23 +995,42 @@ void CCNode::transform()
 
 void CCNode::onEnter()
 {
-    arrayMakeObjectsPerformSelector(m_pChildren, onEnter, CCNode*);
-
-    this->resumeSchedulerAndActions();
-
+    //fix setTouchEnabled not take effect when called the function in onEnter in JSBinding.
     m_bRunning = true;
 
-    if (m_eScriptType != kScriptTypeNone)
+    if (m_bTouchEnabled)
+    {
+        registerWithTouchDispatcher();
+    }
+
+    if (m_scriptEventListeners)
     {
         CCScriptEngineManager::sharedManager()->getScriptEngine()->executeNodeEvent(this, kCCNodeOnEnter);
     }
+
+    //Judge the running state for prevent called onEnter method more than once,it's possible that this function called by addChild
+    if (m_pChildren && m_pChildren->count() > 0)
+    {
+        CCObject* child;
+        CCNode* node;
+        CCARRAY_FOREACH(m_pChildren, child)
+        {
+            node = (CCNode*)child;
+            if (!node->isRunning())
+            {
+                node->onEnter();
+            }
+        }
+    }
+
+    this->resumeSchedulerAndActions();
 }
 
 void CCNode::onEnterTransitionDidFinish()
 {
     arrayMakeObjectsPerformSelector(m_pChildren, onEnterTransitionDidFinish, CCNode*);
 
-    if (m_eScriptType != kScriptTypeNone)
+    if (m_scriptEventListeners)
     {
         CCScriptEngineManager::sharedManager()->getScriptEngine()->executeNodeEvent(this, kCCNodeOnEnterTransitionDidFinish);
     }
@@ -926,42 +1038,30 @@ void CCNode::onEnterTransitionDidFinish()
 
 void CCNode::onExitTransitionDidStart()
 {
-    arrayMakeObjectsPerformSelector(m_pChildren, onExitTransitionDidStart, CCNode*);
-
-    if (m_eScriptType != kScriptTypeNone)
+    if (m_scriptEventListeners)
     {
         CCScriptEngineManager::sharedManager()->getScriptEngine()->executeNodeEvent(this, kCCNodeOnExitTransitionDidStart);
     }
+
+    arrayMakeObjectsPerformSelector(m_pChildren, onExitTransitionDidStart, CCNode*);
 }
 
 void CCNode::onExit()
 {
     this->pauseSchedulerAndActions();
 
-    m_bRunning = false;
-
-    if ( m_eScriptType != kScriptTypeNone)
+    if( m_bTouchEnabled )
     {
-        CCScriptEngineManager::sharedManager()->getScriptEngine()->executeNodeEvent(this, kCCNodeOnExit);
+        unregisterWithTouchDispatcher();
     }
 
-    arrayMakeObjectsPerformSelector(m_pChildren, onExit, CCNode*);    
-}
+    m_bRunning = false;
 
-void CCNode::registerScriptHandler(int nHandler)
-{
-    unregisterScriptHandler();
-    m_nScriptHandler = nHandler;
-    LUALOG("[LUA] Add CCNode event handler: %d", m_nScriptHandler);
-}
+    arrayMakeObjectsPerformSelector(m_pChildren, onExit, CCNode*);
 
-void CCNode::unregisterScriptHandler(void)
-{
-    if (m_nScriptHandler)
+    if (m_scriptEventListeners)
     {
-        CCScriptEngineManager::sharedManager()->getScriptEngine()->removeScriptHandler(m_nScriptHandler);
-        LUALOG("[LUA] Remove CCNode event handler: %d", m_nScriptHandler);
-        m_nScriptHandler = 0;
+        CCScriptEngineManager::sharedManager()->getScriptEngine()->executeNodeEvent(this, kCCNodeOnExit);
     }
 }
 
@@ -1041,21 +1141,9 @@ void CCNode::scheduleUpdateWithPriority(int priority)
     m_pScheduler->scheduleUpdateForTarget(this, priority, !m_bRunning);
 }
 
-void CCNode::scheduleUpdateWithPriorityLua(int nHandler, int priority)
-{
-    unscheduleUpdate();
-    m_nUpdateScriptHandler = nHandler;
-    m_pScheduler->scheduleUpdateForTarget(this, priority, !m_bRunning);
-}
-
 void CCNode::unscheduleUpdate()
 {
     m_pScheduler->unscheduleUpdateForTarget(this);
-    if (m_nUpdateScriptHandler)
-    {
-        CCScriptEngineManager::sharedManager()->getScriptEngine()->removeScriptHandler(m_nUpdateScriptHandler);
-        m_nUpdateScriptHandler = 0;
-    }
 }
 
 void CCNode::schedule(SEL_SCHEDULE selector)
@@ -1110,11 +1198,11 @@ void CCNode::pauseSchedulerAndActions()
 // override me
 void CCNode::update(float fDelta)
 {
-    if (m_nUpdateScriptHandler)
+    if (m_scriptEventListeners)
     {
-        CCScriptEngineManager::sharedManager()->getScriptEngine()->executeSchedule(m_nUpdateScriptHandler, fDelta, this);
+        CCScriptEngineManager::sharedManager()->getScriptEngine()->executeNodeEnterFrameEvent(this, fDelta);
     }
-    
+
     if (m_pComponentContainer && !m_pComponentContainer->isEmpty())
     {
         m_pComponentContainer->visit(fDelta);
@@ -1123,14 +1211,14 @@ void CCNode::update(float fDelta)
 
 CCAffineTransform CCNode::nodeToParentTransform(void)
 {
-    if (m_bTransformDirty) 
+    if (m_bTransformDirty)
     {
 
         // Translate values
         float x = m_obPosition.x;
         float y = m_obPosition.y;
 
-        if (m_bIgnoreAnchorPointForPosition) 
+        if (m_bIgnoreAnchorPointForPosition)
         {
             x += m_obAnchorPointInPoints.x;
             y += m_obAnchorPointInPoints.y;
@@ -1166,16 +1254,16 @@ CCAffineTransform CCNode::nodeToParentTransform(void)
         // Build Transform Matrix
         // Adjusted transform calculation for rotational skew
         m_sTransform = CCAffineTransformMake( cy * m_fScaleX,  sy * m_fScaleX,
-            -sx * m_fScaleY, cx * m_fScaleY,
-            x, y );
+                                             -sx * m_fScaleY, cx * m_fScaleY,
+                                             x, y );
 
         // XXX: Try to inline skew
         // If skew is needed, apply skew and then anchor point
-        if (needsSkewMatrix) 
+        if (needsSkewMatrix)
         {
             CCAffineTransform skewMatrix = CCAffineTransformMake(1.0f, tanf(CC_DEGREES_TO_RADIANS(m_fSkewY)),
-                tanf(CC_DEGREES_TO_RADIANS(m_fSkewX)), 1.0f,
-                0.0f, 0.0f );
+                                                                 tanf(CC_DEGREES_TO_RADIANS(m_fSkewX)), 1.0f,
+                                                                 0.0f, 0.0f );
             m_sTransform = CCAffineTransformConcat(skewMatrix, m_sTransform);
 
             // adjust anchor point
@@ -1184,7 +1272,7 @@ CCAffineTransform CCNode::nodeToParentTransform(void)
                 m_sTransform = CCAffineTransformTranslate(m_sTransform, -m_obAnchorPointInPoints.x, -m_obAnchorPointInPoints.y);
             }
         }
-        
+
         if (m_bAdditionalTransformDirty)
         {
             m_sTransform = CCAffineTransformConcat(m_sTransform, m_sAdditionalTransform);
@@ -1265,6 +1353,7 @@ CCPoint CCNode::convertTouchToNodeSpace(CCTouch *touch)
     CCPoint point = touch->getLocation();
     return this->convertToNodeSpace(point);
 }
+
 CCPoint CCNode::convertTouchToNodeSpaceAR(CCTouch *touch)
 {
     CCPoint point = touch->getLocation();
@@ -1273,6 +1362,7 @@ CCPoint CCNode::convertTouchToNodeSpaceAR(CCTouch *touch)
 
 void CCNode::updateTransform()
 {
+    m_drawOrder = ++g_drawOrder;
     // Recursively iterate over children
     arrayMakeObjectsPerformSelector(m_pChildren, updateTransform, CCNode*);
 }
@@ -1292,144 +1382,454 @@ bool CCNode::removeComponent(const char *pName)
     return m_pComponentContainer->remove(pName);
 }
 
+bool CCNode::removeComponent(CCComponent *pComponent)
+{
+    return m_pComponentContainer->remove(pComponent);
+}
+
 void CCNode::removeAllComponents()
 {
     m_pComponentContainer->removeAll();
 }
 
-// CCNodeRGBA
-CCNodeRGBA::CCNodeRGBA()
-: _displayedOpacity(255)
-, _realOpacity(255)
-, _displayedColor(ccWHITE)
-, _realColor(ccWHITE)
-, _cascadeColorEnabled(false)
-, _cascadeOpacityEnabled(false)
-{}
+// merge CCNodeRGBA to CCNode
 
-CCNodeRGBA::~CCNodeRGBA() {}
-
-bool CCNodeRGBA::init()
+GLubyte CCNode::getOpacity(void)
 {
-    if (CCNode::init())
-    {
-        _displayedOpacity = _realOpacity = 255;
-        _displayedColor = _realColor = ccWHITE;
-        _cascadeOpacityEnabled = _cascadeColorEnabled = false;
-        return true;
-    }
-    return false;
+	return m_realOpacity;
 }
 
-GLubyte CCNodeRGBA::getOpacity(void)
+GLubyte CCNode::getDisplayedOpacity(void)
 {
-	return _realOpacity;
+	return m_displayedOpacity;
 }
 
-GLubyte CCNodeRGBA::getDisplayedOpacity(void)
+void CCNode::setOpacity(GLubyte opacity)
 {
-	return _displayedOpacity;
-}
+    m_displayedOpacity = m_realOpacity = opacity;
 
-void CCNodeRGBA::setOpacity(GLubyte opacity)
-{
-    _displayedOpacity = _realOpacity = opacity;
-    
-	if (_cascadeOpacityEnabled)
+	if (m_cascadeOpacityEnabled)
     {
 		GLubyte parentOpacity = 255;
-        CCRGBAProtocol* pParent = dynamic_cast<CCRGBAProtocol*>(m_pParent);
-        if (pParent && pParent->isCascadeOpacityEnabled())
+        if (m_pParent && m_pParent->isCascadeOpacityEnabled())
         {
-            parentOpacity = pParent->getDisplayedOpacity();
+            parentOpacity = m_pParent->getDisplayedOpacity();
         }
         this->updateDisplayedOpacity(parentOpacity);
-	}
+    }
 }
 
-void CCNodeRGBA::updateDisplayedOpacity(GLubyte parentOpacity)
+void CCNode::setOpacityModifyRGB(bool var)
 {
-	_displayedOpacity = _realOpacity * parentOpacity/255.0;
-	
-    if (_cascadeOpacityEnabled)
+    m_isOpacityModifyRGB = var;
+    if (m_pChildren && m_pChildren->count() != 0)
+    {
+        CCObject* child;
+        CCARRAY_FOREACH(m_pChildren, child)
+        {
+            dynamic_cast<CCNode*>(child)->setOpacityModifyRGB(var);
+        }
+    }
+}
+
+bool CCNode::isOpacityModifyRGB(void)
+{
+    return m_isOpacityModifyRGB;
+}
+
+void CCNode::updateDisplayedOpacity(GLubyte parentOpacity)
+{
+	m_displayedOpacity = (GLubyte)(m_realOpacity * parentOpacity/255.0);
+
+    if (m_cascadeOpacityEnabled)
     {
         CCObject* pObj;
         CCARRAY_FOREACH(m_pChildren, pObj)
         {
-            CCRGBAProtocol* item = dynamic_cast<CCRGBAProtocol*>(pObj);
-            if (item)
-            {
-                item->updateDisplayedOpacity(_displayedOpacity);
-            }
+            dynamic_cast<CCNode*>(pObj)->updateDisplayedOpacity(m_displayedOpacity);
         }
     }
 }
 
-bool CCNodeRGBA::isCascadeOpacityEnabled(void)
+bool CCNode::isCascadeOpacityEnabled(void)
 {
-    return _cascadeOpacityEnabled;
+    return m_cascadeOpacityEnabled;
 }
 
-void CCNodeRGBA::setCascadeOpacityEnabled(bool cascadeOpacityEnabled)
+void CCNode::setCascadeOpacityEnabled(bool cascadeOpacityEnabled)
 {
-    _cascadeOpacityEnabled = cascadeOpacityEnabled;
+    m_cascadeOpacityEnabled = cascadeOpacityEnabled;
 }
 
-const ccColor3B& CCNodeRGBA::getColor(void)
+const ccColor3B& CCNode::getColor(void)
 {
-	return _realColor;
+	return m_realColor;
 }
 
-const ccColor3B& CCNodeRGBA::getDisplayedColor()
+const ccColor3B& CCNode::getDisplayedColor()
 {
-	return _displayedColor;
+	return m_displayedColor;
 }
 
-void CCNodeRGBA::setColor(const ccColor3B& color)
+void CCNode::setColor(const ccColor3B& color)
 {
-	_displayedColor = _realColor = color;
-	
-	if (_cascadeColorEnabled)
+	m_displayedColor = m_realColor = color;
+
+	if (m_cascadeColorEnabled)
     {
 		ccColor3B parentColor = ccWHITE;
-        CCRGBAProtocol *parent = dynamic_cast<CCRGBAProtocol*>(m_pParent);
-		if (parent && parent->isCascadeColorEnabled())
+		if (m_pParent && m_pParent->isCascadeColorEnabled())
         {
-            parentColor = parent->getDisplayedColor(); 
+            parentColor = m_pParent->getDisplayedColor();
         }
-        
+
         updateDisplayedColor(parentColor);
 	}
 }
 
-void CCNodeRGBA::updateDisplayedColor(const ccColor3B& parentColor)
+void CCNode::updateDisplayedColor(const ccColor3B& parentColor)
 {
-	_displayedColor.r = _realColor.r * parentColor.r/255.0;
-	_displayedColor.g = _realColor.g * parentColor.g/255.0;
-	_displayedColor.b = _realColor.b * parentColor.b/255.0;
-    
-    if (_cascadeColorEnabled)
+	m_displayedColor.r = (GLubyte)(m_realColor.r * (float)parentColor.r/255.0f);
+	m_displayedColor.g = (GLubyte)(m_realColor.g * (float)parentColor.g/255.0f);
+	m_displayedColor.b = (GLubyte)(m_realColor.b * (float)parentColor.b/255.0f);
+
+    if (m_cascadeColorEnabled)
     {
         CCObject *obj = NULL;
         CCARRAY_FOREACH(m_pChildren, obj)
         {
-            CCRGBAProtocol *item = dynamic_cast<CCRGBAProtocol*>(obj);
-            if (item)
+            dynamic_cast<CCNode*>(obj)->updateDisplayedColor(m_displayedColor);
+        }
+    }
+}
+
+bool CCNode::isCascadeColorEnabled(void)
+{
+    return m_cascadeColorEnabled;
+}
+
+void CCNode::setCascadeColorEnabled(bool cascadeColorEnabled)
+{
+    m_cascadeColorEnabled = cascadeColorEnabled;
+}
+
+// ----------------------------------------
+
+CCScene *CCNode::getScene()
+{
+    if (!m_bRunning) return NULL;
+    CCNode *parent = getParent();
+    if (!parent) return NULL;
+
+    CCNode *scene = parent;
+    while (parent)
+    {
+        parent = parent->getParent();
+        if (parent) scene = parent;
+    }
+    return dynamic_cast<CCScene*>(scene);
+}
+
+void CCNode::registerWithTouchDispatcher()
+{
+//    CCLOG("CCNODE: REGISTER WITH TOUCH DISPATHCER <%p>", this);
+    CCScene *scene = getScene();
+    if (scene)
+    {
+        scene->addTouchableNode(this);
+    }
+}
+
+void CCNode::unregisterWithTouchDispatcher()
+{
+//    CCLOG("CCNODE: UNREGISTER WITH TOUCH DISPATHCER <%p>", this);
+    CCScene *scene = getScene();
+    if (scene)
+    {
+        scene->removeTouchableNode(this);
+    }
+}
+
+bool CCNode::isTouchCaptureEnabled()
+{
+    return m_bTouchCaptureEnabled;
+}
+
+void CCNode::setTouchCaptureEnabled(bool value)
+{
+    m_bTouchCaptureEnabled = value;
+}
+
+bool CCNode::isTouchSwallowEnabled()
+{
+    return m_bTouchSwallowEnabled;
+}
+
+void CCNode::setTouchSwallowEnabled(bool value)
+{
+    m_bTouchSwallowEnabled = value;
+}
+
+bool CCNode::ccTouchCaptureBegan(CCTouch *pTouch, CCNode *pTarget)
+{
+    CC_UNUSED_PARAM(pTouch);
+    CC_UNUSED_PARAM(pTarget);
+    if (m_scriptEventListeners)
+    {
+        return executeScriptTouchHandler(CCTOUCHBEGAN, pTouch, NODE_TOUCH_CAPTURING_PHASE);
+    }
+    else
+    {
+        return true;
+    }
+}
+
+bool CCNode::ccTouchCaptureMoved(CCTouch *pTouch, CCNode *pTarget)
+{
+    CC_UNUSED_PARAM(pTouch);
+    CC_UNUSED_PARAM(pTarget);
+    if (m_scriptEventListeners)
+    {
+        return executeScriptTouchHandler(CCTOUCHMOVED, pTouch, NODE_TOUCH_CAPTURING_PHASE);
+    }
+    else
+    {
+        return true;
+    }
+}
+
+void CCNode::ccTouchCaptureEnded(CCTouch *pTouch, CCNode *pTarget)
+{
+    CC_UNUSED_PARAM(pTouch);
+    CC_UNUSED_PARAM(pTarget);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHENDED, pTouch, NODE_TOUCH_CAPTURING_PHASE);
+    }
+}
+
+void CCNode::ccTouchCaptureCancelled(CCTouch *pTouch, CCNode *pTarget)
+{
+    CC_UNUSED_PARAM(pTouch);
+    CC_UNUSED_PARAM(pTarget);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHCANCELLED, pTouch, NODE_TOUCH_CAPTURING_PHASE);
+    }
+}
+
+void CCNode::ccTouchesCaptureBegan(CCSet *pTouches, CCNode *pTarget)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pTarget);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHBEGAN, pTouches, NODE_TOUCH_CAPTURING_PHASE);
+    }
+}
+
+void CCNode::ccTouchesCaptureMoved(CCSet *pTouches, CCNode *pTarget)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pTarget);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHMOVED, pTouches, NODE_TOUCH_CAPTURING_PHASE);
+    }
+}
+
+void CCNode::ccTouchesCaptureEnded(CCSet *pTouches, CCNode *pTarget)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pTarget);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHENDED, pTouches, NODE_TOUCH_CAPTURING_PHASE);
+    }
+}
+
+void CCNode::ccTouchesCaptureCancelled(CCSet *pTouches, CCNode *pTarget)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pTarget);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHCANCELLED, pTouches, NODE_TOUCH_CAPTURING_PHASE);
+    }
+}
+
+void CCNode::ccTouchesCaptureAdded(CCSet *pTouches, CCNode *pTarget)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pTarget);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHADDED, pTouches, NODE_TOUCH_CAPTURING_PHASE);
+    }
+}
+
+void CCNode::ccTouchesCaptureRemoved(CCSet *pTouches, CCNode *pTarget)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pTarget);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHREMOVED, pTouches, NODE_TOUCH_CAPTURING_PHASE);
+    }
+}
+
+bool CCNode::isTouchEnabled()
+{
+    return m_bTouchEnabled;
+}
+
+void CCNode::setTouchEnabled(bool enabled)
+{
+    if (m_bTouchEnabled != enabled)
+    {
+        m_bTouchEnabled = enabled;
+        if (m_bRunning)
+        {
+            if (enabled)
             {
-                item->updateDisplayedColor(_displayedColor);
+                registerWithTouchDispatcher();
+            }
+            else
+            {
+                unregisterWithTouchDispatcher();
             }
         }
     }
 }
 
-bool CCNodeRGBA::isCascadeColorEnabled(void)
+void CCNode::setTouchMode(int mode)
 {
-    return _cascadeColorEnabled;
+    if(m_eTouchMode != mode)
+    {
+        m_eTouchMode = mode;
+
+		if( m_bTouchEnabled)
+        {
+			setTouchEnabled(false);
+			setTouchEnabled(true);
+		}
+    }
 }
 
-void CCNodeRGBA::setCascadeColorEnabled(bool cascadeColorEnabled)
+int CCNode::getTouchMode()
 {
-    _cascadeColorEnabled = cascadeColorEnabled;
+    return m_eTouchMode;
+}
+
+bool CCNode::ccTouchBegan(CCTouch *pTouch, CCEvent *pEvent)
+{
+    CC_UNUSED_PARAM(pTouch);
+    CC_UNUSED_PARAM(pEvent);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHBEGAN, pTouch);
+    }
+    return true;
+}
+
+void CCNode::ccTouchMoved(CCTouch *pTouch, CCEvent *pEvent)
+{
+    CC_UNUSED_PARAM(pTouch);
+    CC_UNUSED_PARAM(pEvent);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHMOVED, pTouch);
+    }
+}
+
+void CCNode::ccTouchEnded(CCTouch *pTouch, CCEvent *pEvent)
+{
+    CC_UNUSED_PARAM(pTouch);
+    CC_UNUSED_PARAM(pEvent);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHENDED, pTouch);
+    }
+}
+
+void CCNode::ccTouchCancelled(CCTouch *pTouch, CCEvent *pEvent)
+{
+    CC_UNUSED_PARAM(pTouch);
+    CC_UNUSED_PARAM(pEvent);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHCANCELLED, pTouch);
+    }
+}
+
+void CCNode::ccTouchesBegan(CCSet *pTouches, CCEvent *pEvent)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pEvent);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHBEGAN, pTouches);
+    }
+}
+
+void CCNode::ccTouchesMoved(CCSet *pTouches, CCEvent *pEvent)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pEvent);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHMOVED, pTouches);
+    }
+}
+
+void CCNode::ccTouchesEnded(CCSet *pTouches, CCEvent *pEvent)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pEvent);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHENDED, pTouches);
+    }
+}
+
+void CCNode::ccTouchesCancelled(CCSet *pTouches, CCEvent *pEvent)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pEvent);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHCANCELLED, pTouches);
+    }
+}
+
+void CCNode::ccTouchesAdded(CCSet *pTouches, CCEvent *pEvent)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pEvent);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHADDED, pTouches);
+    }
+}
+
+void CCNode::ccTouchesRemoved(CCSet *pTouches, CCEvent *pEvent)
+{
+    CC_UNUSED_PARAM(pTouches);
+    CC_UNUSED_PARAM(pEvent);
+    if (m_scriptEventListeners)
+    {
+        executeScriptTouchHandler(CCTOUCHREMOVED, pTouches);
+    }
+}
+
+int CCNode::executeScriptTouchHandler(int nEventType, CCTouch *pTouch, int phase /* = NODE_TOUCH_TARGETING_PHASE */)
+{
+    return CCScriptEngineManager::sharedManager()->getScriptEngine()->executeNodeTouchEvent(this, nEventType, pTouch, phase);
+}
+
+int CCNode::executeScriptTouchHandler(int nEventType, CCSet *pTouches, int phase /* = NODE_TOUCH_TARGETING_PHASE */)
+{
+    return CCScriptEngineManager::sharedManager()->getScriptEngine()->executeNodeTouchesEvent(this, nEventType, pTouches, phase);
 }
 
 NS_CC_END

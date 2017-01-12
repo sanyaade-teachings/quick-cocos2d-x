@@ -53,7 +53,7 @@ THE SOFTWARE.
  *
  * The default anchorPoint in CCSprite is (0.5, 0.5).
  */
-class CCSprite : public CCNodeRGBA
+class CCSprite : public CCNode
 {
     /// @{
     /// @name Creators
@@ -181,6 +181,7 @@ class CCSprite : public CCNodeRGBA
      * Returns the current displayed frame.
      */
     CCSpriteFrame* displayFrame(void);
+    CCSpriteFrame* displayFrame @ getDisplayFrame (void);
 
     /// @} End of frames methods
 

@@ -83,7 +83,11 @@ ccLanguageType CCApplication::getCurrentLanguage()
     ccLanguageType ret = kLanguageEnglish;
     if ([languageCode isEqualToString:@"zh"])
     {
-        ret = kLanguageChinese;
+        NSString * scriptCode = [temp objectForKey:NSLocaleScriptCode];
+        if ([scriptCode isEqualToString:@"Hant"])
+            ret = kLanguageChineseTW;
+        else
+            ret = kLanguageChinese;
     }
     else if ([languageCode isEqualToString:@"en"])
     {
@@ -100,6 +104,9 @@ ccLanguageType CCApplication::getCurrentLanguage()
     }
     else if ([languageCode isEqualToString:@"es"]){
         ret = kLanguageSpanish;
+    }
+    else if ([languageCode isEqualToString:@"nl"]){
+        ret = kLanguageDutch;
     }
     else if ([languageCode isEqualToString:@"ru"]){
         ret = kLanguageRussian;

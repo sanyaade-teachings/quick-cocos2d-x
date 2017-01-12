@@ -34,6 +34,7 @@ NS_CC_BEGIN
 static CCNotificationCenter *s_sharedNotifCenter = NULL;
 
 CCNotificationCenter::CCNotificationCenter()
+: m_scriptHandler(0)
 {
     m_observers = CCArray::createWithCapacity(3);
     m_observers->retain();
@@ -180,7 +181,7 @@ void CCNotificationCenter::postNotification(const char *name, CCObject *object)
             if (0 != observer->getHandler())
             {
                 CCScriptEngineProtocol* engine = CCScriptEngineManager::sharedManager()->getScriptEngine();
-                engine->executeNotificationEvent(this, name);
+                engine->executeNotificationEvent(this, name, object);
             }
             else
             {

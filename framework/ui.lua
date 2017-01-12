@@ -1,8 +1,6 @@
 --[[
 
-Copyright (c) 2011-2012 qeeplay.com
-
-http://dualface.github.com/quick-cocos2d-x/
+Copyright (c) 2011-2014 chukong-inc.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -26,10 +24,9 @@ THE SOFTWARE.
 
 --[[--
 
-Create menu, label, widgets
+创建和管理用户界面
 
 ]]
-
 local ui = {}
 
 ui.DEFAULT_TTF_FONT      = "Arial"
@@ -44,17 +41,75 @@ ui.TEXT_VALIGN_BOTTOM = kCCVerticalTextAlignmentBottom
 
 --[[--
 
+创建一个文字输入框，并返回 CCEditBox 对象。
+
+可用参数：
+
+-   image: 输入框的图像，可以是图像名或者是 CCSprite9Scale 显示对象。用 display.newScale9Sprite() 创建 CCSprite9Scale 显示对象。
+-   imagePressed: 输入状态时输入框显示的图像（可选）
+-   imageDisabled: 禁止状态时输入框显示的图像（可选）
+-   listener: 回调函数
+-   size: 输入框的尺寸，用 CCSize(宽度, 高度) 创建
+-   x, y: 坐标（可选）
+
+~~~ lua
+
+local function onEdit(event, editbox)
+    if event == "began" then
+        -- 开始输入
+    elseif event == "changed" then
+        -- 输入框内容发生变化
+    elseif event == "ended" then
+        -- 输入结束
+    elseif event == "return" then
+        -- 从输入框返回
+    end
+end
+
+local editbox = ui.newEditBox({
+    image = "EditBox.png",
+    listener = onEdit,
+    size = CCSize(200, 40)
+})
+
+~~~
+
+注意: 使用setInputFlag(0) 可设为密码输入框。
+
+注意：构造输入框时，请使用setPlaceHolder来设定初始文本显示。setText为出现输入法后的默认文本。
+
+注意：事件触发机制，player模拟器上与真机不同，请使用真机实测(不同ios版本貌似也略有不同)。
+
+注意：changed事件中，需要条件性使用setText（如trim或转化大小写等），否则在某些ios版本中会造成死循环。
+
+~~~ lua
+
+--错误，会造成死循环
+
+editbox:setText(string.trim(editbox:getText()))
+
+~~~
+
+~~~ lua
+
+--正确，不会造成死循环
+local _text = editbox:getText()
+local _trimed = string.trim(_text)
+if _trimed ~= _text then
+    editbox:setText(_trimed)
+end
+
+~~~
+
+@param table params 参数表格对象
+
+@return CCEditBox 文字输入框
+
 ]]
 function ui.newEditBox(params)
     local imageNormal = params.image
     local imagePressed = params.imagePressed
     local imageDisabled = params.imageDisabled
-    local listener = params.listener
-    local listenerType = type(listener)
-    local tag = params.tag
-    local x = params.x
-    local y = params.y
-    local size = params.size
 
     if type(imageNormal) == "string" then
         imageNormal = display.newScale9Sprite(imageNormal)
@@ -66,26 +121,16 @@ function ui.newEditBox(params)
         imageDisabled = display.newScale9Sprite(imageDisabled)
     end
 
-    local editbox = CCEditBox:create(size, imageNormal, imagePressed, imageDisabled)
+    local editbox = CCEditBox:create(params.size, imageNormal, imagePressed, imageDisabled)
 
     if editbox then
-        CCNodeExtend.extend(editbox)
-        editbox:registerScriptEditBoxHandler(function(event, object)
-            if listenerType == "table" or listenerType == "userdata" then
-                if event == "began" then
-                    listener:onEditBoxBegan(object)
-                elseif event == "ended" then
-                    listener:onEditBoxEnded(object)
-                elseif event == "return" then
-                    listener:onEditBoxReturn(object)
-                elseif event == "changed" then
-                    listener:onEditBoxChanged(object)
-                end
-            elseif listenerType == "function" then
-                listener(event, object)
-            end
-        end)
-        if x and y then editbox:setPosition(x, y) end
+        if params.listener then
+          -- 仅当 监听 方法传入时，才绑定监听方法。以避免 cocos2d-x 层面抛出异常
+          editbox:addEditBoxEventListener(params.listener)
+        end
+        if params.x and params.y then
+            editbox:setPosition(params.x, params.y)
+        end
     end
 
     return editbox
@@ -93,11 +138,16 @@ end
 
 --[[--
 
+创建菜单，并返回 CCMenu 对象。
+
+@param table items 菜单项的数组表
+
+@return CCMenu CCMenu对象
 
 ]]
 function ui.newMenu(items)
     local menu
-    menu = CCNodeExtend.extend(CCMenu:create())
+    menu = CCMenu:create()
 
     for k, item in pairs(items) do
         if not tolua.isnull(item) then
@@ -110,6 +160,40 @@ function ui.newMenu(items)
 end
 
 --[[--
+
+创建一个图像菜单项，并返回 CCMenuItemSprite 对象。
+
+可用参数：
+
+-    image: 正常状态的按钮图像
+-    imageSelected: 按钮按下时的图像（可选）
+-    imageDisabled: 按钮被禁用时的图像（可选）
+-    listener: 回调函数
+-    tag: 按钮的 Tag，会传入回调函数。多个按钮使用同一个回调函数时，可根据 Tag 区分哪一个按钮被按下（可选）
+-    x, y: 坐标（可选）
+-    sound: 按钮按下时播放什么音效（可选）
+
+~~~ lua
+
+local function onButtonClicked(tag)
+    -- 按钮被按下
+end
+
+local item = ui.newImageMenuItem({
+    image = "Button.png",
+    imageSelected = "ButtonSelected.png",
+    listener = onButtonClicked
+})
+
+-- 创建菜单并加入场景，否则菜单项不会工作
+local menu = ui.newMenu({item})
+scene:addChild(menu)
+
+~~~
+
+@param table params 参数表格对象
+
+@return CCMenuItemSprite CCMenuItemSprite对象
 
 ]]
 function ui.newImageMenuItem(params)
@@ -134,9 +218,8 @@ function ui.newImageMenuItem(params)
 
     local item = CCMenuItemSprite:create(imageNormal, imageSelected, imageDisabled)
     if item then
-        CCNodeExtend.extend(item)
         if type(listener) == "function" then
-            item:registerScriptTapHandler(function(tag)
+            item:addNodeEventListener(cc.MENU_ITEM_CLICKED_EVENT, function(tag)
                 if sound then audio.playSound(sound) end
                 listener(tag)
             end)
@@ -150,7 +233,23 @@ end
 
 --[[--
 
+创建一个文字标签菜单项，并返回 CCMenuItemLabel 对象。
+
+可用参数：
+
+-   listener: 回调函数
+-   tag: 按钮的 Tag，会传入回调函数。多个按钮使用同一个回调函数时，可根据 Tag 区分哪一个按钮被按下（可选）
+-   x, y: 坐标（可选）
+-   sound: 按钮按下时播放什么音效（可选）
+
+以及所有可以用于 ui.newTTFLabel() 的参数。
+
+@param table params 参数表格对象
+
+@return CCMenuItemLabel CCMenuItemLabel对象
+
 ]]
+
 function ui.newTTFLabelMenuItem(params)
     local p = clone(params)
     p.x, p.y = nil, nil
@@ -164,9 +263,8 @@ function ui.newTTFLabelMenuItem(params)
 
     local item = CCMenuItemLabel:create(label)
     if item then
-        CCNodeExtend.extend(item)
         if type(listener) == "function" then
-            item:registerScriptTapHandler(function(tag)
+            item:addNodeEventListener(cc.MENU_ITEM_CLICKED_EVENT, function(tag)
                 if sound then audio.playSound(sound) end
                 listener(tag)
             end)
@@ -179,6 +277,30 @@ function ui.newTTFLabelMenuItem(params)
 end
 
 --[[--
+
+用位图字体创建文本显示对象，并返回 CCLabelBMFont 对象。
+
+BMFont 通常用于显示英文内容，因为英文字母加数字和常用符号也不多，生成的 BMFont 文件较小。如果是中文，应该用 TTFLabel。
+
+可用参数：
+
+-    text: 要显示的文本
+-    font: 字体文件名
+-    align: 文字的水平对齐方式（可选）
+-    x, y: 坐标（可选）
+
+~~~ lua
+
+local label = ui.newBMFontLabel({
+    text = "Hello",
+    font = "UIFont.fnt",
+})
+
+~~~
+
+@param table params 参数表格对象
+
+@return CCLabelBMFont CCLabelBMFont对象
 
 ]]
 function ui.newBMFontLabel(params)
@@ -194,7 +316,6 @@ function ui.newBMFontLabel(params)
     local label = CCLabelBMFont:create(text, font, kCCLabelAutomaticWidth, textAlign)
     if not label then return end
 
-    CCNodeExtend.extend(label)
     if type(x) == "number" and type(y) == "number" then
         label:setPosition(x, y)
     end
@@ -212,33 +333,85 @@ end
 
 --[[--
 
+使用 TTF 字体创建文字显示对象，并返回 CCLabelTTF 对象。
+
+可用参数：
+
+-    text: 要显示的文本
+-    font: 字体名，如果是非系统自带的 TTF 字体，那么指定为字体文件名
+-    size: 文字尺寸，因为是 TTF 字体，所以可以任意指定尺寸
+-    color: 文字颜色（可选），用 ccc3() 指定，默认为白色
+-    align: 文字的水平对齐方式（可选）
+-    valign: 文字的垂直对齐方式（可选），仅在指定了 dimensions 参数时有效
+-    dimensions: 文字显示对象的尺寸（可选），使用 CCSize() 指定
+-    x, y: 坐标（可选）
+
+align 和 valign 参数可用的值：
+
+-    ui.TEXT_ALIGN_LEFT 左对齐
+-    ui.TEXT_ALIGN_CENTER 水平居中对齐
+-    ui.TEXT_ALIGN_RIGHT 右对齐
+-    ui.TEXT_VALIGN_TOP 垂直顶部对齐
+-    ui.TEXT_VALIGN_CENTER 垂直居中对齐
+-    ui.TEXT_VALIGN_BOTTOM 垂直底部对齐
+
+~~~ lua
+
+-- 创建一个居中对齐的文字显示对象
+local label = ui.newTTFLabel({
+    text = "Hello, World",
+    font = "Marker Felt",
+    size = 64,
+    align = ui.TEXT_ALIGN_CENTER -- 文字内部居中对齐
+})
+
+-- 左对齐，并且多行文字顶部对齐
+local label = ui.newTTFLabel({
+    text = "Hello, World\n您好，世界",
+    font = "Arial",
+    size = 64,
+    color = ccc3(255, 0, 0), -- 使用纯红色
+    align = ui.TEXT_ALIGN_LEFT,
+    valign = ui.TEXT_VALIGN_TOP,
+    dimensions = CCSize(400, 200)
+})
+
+~~~
+
+@param table params 参数表格对象
+
+@return CCLabelTTF CCLabelTTF对象
+
 ]]
 function ui.newTTFLabel(params)
     assert(type(params) == "table",
            "[framework.ui] newTTFLabel() invalid params")
-
+    local label
     local text       = tostring(params.text)
     local font       = params.font or ui.DEFAULT_TTF_FONT
     local size       = params.size or ui.DEFAULT_TTF_FONT_SIZE
-    local color      = params.color or display.COLOR_WHITE
+    local color      = params.color
     local textAlign  = params.align or ui.TEXT_ALIGN_LEFT
     local textValign = params.valign or ui.TEXT_VALIGN_CENTER
     local x, y       = params.x, params.y
-    local dimensions = params.dimensions
+    local dimensions = params.dimensions or CCSizeMake(0, 0)
+    local outlineWidth = params.outlineWidth or 0
+    local outlineColor 
+
+    if outlineWidth > 0 then
+        outlineColor = params.outlineColor or ccc3(46,28,18)
+        label = CCLabelTTF:create(text, font, size, dimensions, textAlign, textValign, outlineColor, outlineWidth)
+    else
+        label = CCLabelTTF:create(text, font, size, dimensions, textAlign, textValign)
+    end
 
     assert(type(size) == "number",
            "[framework.ui] newTTFLabel() invalid params.size")
 
-    local label
-    if dimensions then
-        label = CCLabelTTF:create(text, font, size, dimensions, textAlign, textValign)
-    else
-        label = CCLabelTTF:create(text, font, size)
-    end
-
     if label then
-        CCNodeExtend.extend(label)
-        label:setColor(color)
+        if color then
+            label:setColor(color)
+        end
 
         function label:realign(x, y)
             if textAlign == ui.TEXT_ALIGN_LEFT then
@@ -257,6 +430,16 @@ function ui.newTTFLabel(params)
 end
 
 --[[--
+
+创建带阴影的 TTF 文字显示对象，并返回 CCLabelTTF 对象。
+
+相比 ui.newTTFLabel() 增加一个参数：
+
+-   shadowColor: 阴影颜色（可选），用 ccc3() 指定，默认为黑色
+
+@param table params 参数表格对象
+
+@return CCLabelTTF CCLabelTTF对象
 
 ]]
 function ui.newTTFLabelWithShadow(params)
@@ -309,7 +492,6 @@ function ui.newTTFLabelWithShadow(params)
 
     if x and y then
         g:setPosition(x, y)
-        g:pixels()
     end
 
     return g
@@ -317,74 +499,98 @@ end
 
 --[[--
 
+创建带描边效果的 TTF 文字显示对象，并返回 CCLabelTTF 对象。
+
+相比 ui.newTTFLabel() 增加参数：
+
+    outlineColor: 描边颜色（可选），用 ccc3() 指定，默认为黑色
+    outlineWidth: 描边宽度（可选）, 默认为1
+    opacity: 描边透明度 (可选),默认为255
+
+@param table params 参数表格对象
+
+@return CCLabelTTF CCLabelTTF对象
+
 ]]
 function ui.newTTFLabelWithOutline(params)
     assert(type(params) == "table",
            "[framework.ui] newTTFLabelWithShadow() invalid params")
+    return ui.newTTFLabel(params)
+end
 
-    local color        = params.color or display.COLOR_WHITE
-    local outlineColor = params.outlineColor or display.COLOR_BLACK
-    local x, y         = params.x, params.y
+--[[--
 
-    local g = display.newNode()
-    params.size  = params.size
-    params.color = outlineColor
-    params.x, params.y = 0, 0
-    g.shadow1 = ui.newTTFLabel(params)
-    g.shadow1:realign(1, 0)
-    g:addChild(g.shadow1)
-    g.shadow2 = ui.newTTFLabel(params)
-    g.shadow2:realign(-1, 0)
-    g:addChild(g.shadow2)
-    g.shadow3 = ui.newTTFLabel(params)
-    g.shadow3:realign(0, -1)
-    g:addChild(g.shadow3)
-    g.shadow4 = ui.newTTFLabel(params)
-    g.shadow4:realign(0, 1)
-    g:addChild(g.shadow4)
+为一个label或者sprite绘制描边，并将绘制好的描边添加到传入node的后面
 
-    params.color = color
-    g.label = ui.newTTFLabel(params)
-    g.label:realign(0, 0)
-    g:addChild(g.label)
+@param node 需要描边的对象
+       outlineWidth 描边宽度
+       color外边框颜色
+       opacity描边透明度
+        scr,dst混合模式
+@return CCRenderTexture 描边对象
 
-    function g:setString(text)
-        g.shadow1:setString(text)
-        g.shadow2:setString(text)
-        g.shadow3:setString(text)
-        g.shadow4:setString(text)
-        g.label:setString(text)
+]]
+function ui.createOutline(node,outlineWidth,color,opacity,src,dst)
+    local w = node:getTexture():getContentSize().width + outlineWidth * 2
+    local h = node:getTexture():getContentSize().height + outlineWidth * 2
+    local rt = CCRenderTexture:create(w, h)
+    -- 记录原始位置
+    local originX, originY = node:getPosition()
+    local originColorR = 255
+    local originColorG = 255
+    local originColorB = 255
+    if node.getColor then
+         -- 记录原始颜色RGB信息
+        originColorR = node:getColor().r
+        originColorG = node:getColor().g
+        originColorB = node:getColor().b
     end
+    -- 记录原始透明度信息
+    local originOpacity = node:getOpacity()
+    -- 记录原始是否显示
+    local originVisibility = node:isVisible()
+    -- 记录原始混合模式
+    local originBlend = node:getBlendFunc()
+    -- 设置颜色、透明度、显示
+    node:setColor(color)
+    node:setOpacity(opacity)
+    node:setVisible(true)
+    -- 设置新的混合模式
+    local blendFuc = ccBlendFunc:new()
+    blendFuc.src = src or GL_SRC_ALPHA
+    blendFuc.dst = dst or GL_ONE
+    -- blendFuc.dst = GL_ONE_MINUS_SRC_COLOR
+    node:setBlendFunc(blendFuc)
+    -- 这里考虑到锚点的位置，如果锚点刚好在中心处，代码可能会更好理解点
+    local bottomLeftX = node:getTexture():getContentSize().width * node:getAnchorPoint().x + outlineWidth 
+    local bottomLeftY = node:getTexture():getContentSize().height * node:getAnchorPoint().y + outlineWidth
 
-    function g:getContentSize()
-        return g.label:getContentSize()
+    local positionOffsetX = node:getTexture():getContentSize().width * node:getAnchorPoint().x - node:getTexture():getContentSize().width / 2
+    local positionOffsetY = node:getTexture():getContentSize().height * node:getAnchorPoint().y - node:getTexture():getContentSize().height / 2
+
+    local rtPosition = ccp(originX - positionOffsetX, originY - positionOffsetY)
+    
+    local function degrees2radians(angle)
+        return angle * 0.01745329252
     end
-
-    function g:setColor(...)
-        g.label:setColor(...)
+    rt:begin()
+    for i = 0, 360, 5 do
+        node:setPosition(ccp(bottomLeftX + math.sin(degrees2radians(i)) * outlineWidth, bottomLeftY + math.cos(degrees2radians(i)) * outlineWidth))
+        node:visit()
     end
-
-    function g:setOutlineColor(...)
-        g.shadow1:setColor(...)
-        g.shadow2:setColor(...)
-        g.shadow3:setColor(...)
-        g.shadow4:setColor(...)
-    end
-
-    function g:setOpacity(opacity)
-        g.label:setOpacity(opacity)
-        g.shadow1:setOpacity(opacity)
-        g.shadow2:setOpacity(opacity)
-        g.shadow3:setOpacity(opacity)
-        g.shadow4:setOpacity(opacity)
-    end
-
-    if x and y then
-        g:setPosition(x, y)
-        g:pixels()
-    end
-
-    return g
+    rt:endToLua()
+    -- node恢复原状
+    node:setPosition(originX, originY)
+    node:setColor(ccc3(originColorR, originColorG, originColorB))
+    node:setBlendFunc(originBlend)
+    node:setVisible(originVisibility)
+    node:setOpacity(originOpacity)
+    rt:setPosition(rtPosition)
+    --防锯齿
+    rt:getSprite():getTexture():setAntiAliasTexParameters()
+    node:getParent():addChild(rt,node:getZOrder()-1)
+    node.stroke = rt
+    return rt
 end
 
 return ui

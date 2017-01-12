@@ -26,6 +26,7 @@
 #include "cocoa/CCDictionary.h"
 #include "CCFileUtils.h"
 #include "support/tinyxml2/tinyxml2.h"
+#include "apptools/HelperFunc.h"
 
 #include <vector> // because its based on windows 8 build :P
 
@@ -82,7 +83,7 @@ bool XmlSaxHander::VisitExit( const tinyxml2::XMLElement& element )
 bool XmlSaxHander::Visit( const tinyxml2::XMLText& text )
 {
 	//CCLog("Visit %s",text.Value());
-	CCSAXParser::textHandler(m_ccsaxParserImp, (const CC_XML_CHAR *)text.Value(), strlen(text.Value()));
+	CCSAXParser::textHandler(m_ccsaxParserImp, (const CC_XML_CHAR *)text.Value(), (unsigned int)strlen(text.Value()));
 	return true;
 }
 
@@ -116,10 +117,11 @@ bool CCSAXParser::parse(const char *pszFile)
 {
     bool bRet = false;
     unsigned long size = 0;
-    char* pBuffer = (char*)CCFileUtils::sharedFileUtils()->getFileData(pszFile, "rt", &size);
+    //char* pBuffer = (char*)CCFileUtils::sharedFileUtils()->getFileData(pszFile, "rt", &size);
+    char* pBuffer = (char*)CZHelperFunc::getFileData(pszFile, "rb", &size);
     if (pBuffer != NULL && size > 0)
     {
-        bRet = parse(pBuffer, size);
+        bRet = parse(pBuffer, (unsigned int)size);
     }
     CC_SAFE_DELETE_ARRAY(pBuffer);
     return bRet;

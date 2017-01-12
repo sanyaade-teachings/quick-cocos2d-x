@@ -1,8 +1,6 @@
 --[[
 
-Copyright (c) 2011-2012 qeeplay.com
-
-http://dualface.github.com/quick-cocos2d-x/
+Copyright (c) 2011-2014 chukong-inc.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -26,10 +24,9 @@ THE SOFTWARE.
 
 --[[--
 
-Actions, Transformations and Effects
+为图像创造效果
 
 ]]
-
 local transition = {}
 
 local ACTION_EASING = {}
@@ -57,10 +54,7 @@ ACTION_EASING["SINEOUT"]          = {CCEaseSineOut, 1}
 
 local actionManager = CCDirector:sharedDirector():getActionManager()
 
---[[--
-@ignore
-]]
-local function newEasing(action, easingName, more)
+function transition.newEasing(action, easingName, more)
     local key = string.upper(tostring(easingName))
     if string.sub(key, 1, 6) == "CCEASE" then
         key = string.sub(key, 7)
@@ -77,49 +71,18 @@ local function newEasing(action, easingName, more)
     return easing or action
 end
 
---[[--
-
-Execute an action with a target.
-
-### Example:
-
-    -- moving right target 100 points, durations of 2.0 seconds.
-    local action = CCMoveBy:create(ccp(100, 0), 0.2)
-
-    local args = {
-        delay = 3.0,                        -- before moving, delay 3.0 seconds
-        easing = "CCEaseBackInOut",         -- use CCEaseBackInOut for easing
-        onComplete = function()             -- call function after moving completed
-            echo("MOVING COMPLETED")
-        end,
-    }
-    transition.execute(sprite, action, args)
-
-Note: **Other transiton methods can also use the same args parameters.**
-
-### Parameters:
-
--   CCNode **target**
-
--   CCAction **action**
-
--   [_optional table **args**_]
-
-]]
-function transition.execute(target, action, args)
-    assert(not tolua.isnull(target), "transition.execute() - target is not CCNode")
-
-    args = totable(args)
+function transition.create(action, args)
+    args = checktable(args)
     if args.easing then
         if type(args.easing) == "table" then
-            action = newEasing(action, unpack(args.easing))
+            action = transition.newEasing(action, unpack(args.easing))
         else
-            action = newEasing(action, args.easing)
+            action = transition.newEasing(action, args.easing)
         end
     end
 
     local actions = {}
-    local delay = tonumber(args.delay)
+    local delay = checknumber(args.delay)
     if delay > 0 then
         actions[#actions + 1] = CCDelayTime:create(delay)
     end
@@ -132,29 +95,94 @@ function transition.execute(target, action, args)
     end
 
     if #actions > 1 then
-        action = transition.sequence(actions)
-        target:runAction(action)
+        return transition.sequence(actions)
     else
-        target:runAction(actions[1])
+        return actions[1]
     end
+end
 
+--[[--
+
+执行一个动作效果
+
+~~~ lua
+
+-- 等待 1.0 后开始移动对象
+-- 耗时 1.5 秒，将对象移动到屏幕中央
+-- 移动使用 backout 缓动效果
+-- 移动结束后执行函数，显示 move completed
+transition.execute(sprite, CCMoveTo:create(1.5, CCPoint(display.cx, display.cy)), {
+    delay = 1.0,
+    easing = "backout",
+    onComplete = function()
+        print("move completed")
+    end,
+})
+
+~~~
+
+transition.execute() 是一个强大的工具，可以为原本单一的动作添加各种附加特性。
+
+transition.execute() 的参数表格支持下列参数：
+
+-    delay: 等待多长时间后开始执行动作
+-    easing: 缓动效果的名字及可选的附加参数，效果名字不区分大小写
+-    onComplete: 动作执行完成后要调用的函数
+-    time: 执行动作需要的时间
+
+transition.execute() 支持的缓动效果：
+
+-    backIn
+-    backInOut
+-    backOut
+-    bounce
+-    bounceIn
+-    bounceInOut
+-    bounceOut
+-    elastic, 附加参数默认为 0.3
+-    elasticIn, 附加参数默认为 0.3
+-    elasticInOut, 附加参数默认为 0.3
+-    elasticOut, 附加参数默认为 0.3
+-    exponentialIn, 附加参数默认为 1.0
+-    exponentialInOut, 附加参数默认为 1.0
+-    exponentialOut, 附加参数默认为 1.0
+-    In, 附加参数默认为 1.0
+-    InOut, 附加参数默认为 1.0
+-    Out, 附加参数默认为 1.0
+-    rateaction, 附加参数默认为 1.0
+-    sineIn
+-    sineInOut
+-    sineOut
+
+@param CCNode target 显示对象
+@param CCAction action 动作对象
+@param table args 参数表格对象
+
+@return mixed 结果 
+
+]]
+function transition.execute(target, action, args)
+    assert(not tolua.isnull(target), "transition.execute() - target is not CCNode")
+    local action = transition.create(action, args)
+    target:runAction(action)
     return action
 end
 
 --[[--
 
-Rotate a sprite to the rotation.
+将显示对象旋转到指定角度，并返回 CCAction 动作对象。
 
-### Example:
+~~~ lua
 
-    -- rotate sprite to 200
-    transition.rotateTo(sprite, {time = 2.0, rotate = 200})
+-- 耗时 0.5 秒将 sprite 旋转到 180 度
+transition.rotateTo(sprite, {rotate = 180, time = 0.5})
 
-### Parameters:
+~~~
 
--   CCNode **target**
+@param CCNode target 显示对象
+@param table args 参数表格对象
 
--   table **args**
+@return mixed 结果
 
 ]]
 function transition.rotateTo(target, args)
@@ -166,18 +194,23 @@ end
 
 --[[--
 
-Moves a sprite to the position x,y. x and y are absolute coordinates by modifying it's position attribute.
+将显示对象移动到指定位置，并返回 CCAction 动作对象。
 
-### Example:
+~~~ lua
 
-    -- Moving sprite to 100, 100
-    transition.moveTo(sprite, {time = 2.0, x = 100, y = 100})
+-- 移动到屏幕中心
+transition.moveTo(sprite, {x = display.cx, y = display.cy, time = 1.5})
+-- 移动到屏幕左边，不改变 y
+transition.moveTo(sprite, {x = display.left, time = 1.5})
+-- 移动到屏幕底部，不改变 x
+transition.moveTo(sprite, {y = display.bottom, time = 1.5})
 
-### Parameters:
+~~~
 
--   CCNode **target**
+@param CCNode target 显示对象
+@param table args 参数表格对象
 
--   table **args**
+@return mixed 结果
 
 ]]
 function transition.moveTo(target, args)
@@ -185,92 +218,111 @@ function transition.moveTo(target, args)
     local tx, ty = target:getPosition()
     local x = args.x or tx
     local y = args.y or ty
-    local action = CCMoveTo:create(args.time, ccp(x, y))
+    local action = CCMoveTo:create(args.time, CCPoint(x, y))
     return transition.execute(target, action, args)
 end
 
---[[--
+--[[
 
-Moves a sprite x,y points by modifying it's position attribute. x and y are relative to the position of the object.
+将显示对象移动一定距离，并返回 CCAction 动作对象。 
 
-### Example:
+~~~ lua
 
-    -- Moving right and up
-    transition.moveBy(sprite, {time = 2.0, x = 100, y = 100})
+-- 向右移动 100 点，向上移动 100 点
+transition.moveBy(sprite, {x = 100, y = 100, time = 1.5})
+-- 向左移动 100 点，不改变 y
+transition.moveBy(sprite, {x = -100, time = 1.5})
+-- 向下移动 100 点，不改变 x
+transition.moveBy(sprite, {y = -100, time = 1.5})
 
-### Parameters:
+~~~
 
--   CCNode **target**
+@param CCNode target 显示对象
+@param table args 参数表格对象
 
--   table **args**
+@return mixed 结果
 
 ]]
 function transition.moveBy(target, args)
     assert(not tolua.isnull(target), "transition.moveBy() - target is not CCNode")
     local x = args.x or 0
     local y = args.y or 0
-    local action = CCMoveBy:create(args.time, ccp(x, y))
+    local action = CCMoveBy:create(args.time, CCPoint(x, y))
     return transition.execute(target, action, args)
 end
 
---[[--
+--[[
 
-Fades In an sprite. It modifies the opacity from 0 to 255. The "reverse" of this action is transition.fadeOut() .
+淡入显示对象，并返回 CCAction 动作对象。 
 
-### Example:
+fadeIn 操作会首先将对象的透明度设置为 0（0%，完全透明），然后再逐步增加为 255（100%，完全不透明）。
 
-    transition.fadeIn(sprite, {time = 1.0})
+如果不希望改变对象当前的透明度，应该用 fadeTo()。 
 
-### Parameters:
+~~~ lua
 
--   CCNode **target**
+action = transition.fadeIn(sprite, {time = 1.5})
 
--   table **args**
+~~~
+
+@param CCNode target 显示对象
+@param table args 参数表格对象
+
+@return mixed 结果
 
 ]]
 function transition.fadeIn(target, args)
     assert(not tolua.isnull(target), "transition.fadeIn() - target is not CCNode")
     local action = CCFadeIn:create(args.time)
-    target:setOpacity(0)
     return transition.execute(target, action, args)
 end
 
---[[--
+--[[
 
-Fades Out an sprite. It modifies the opacity from 255 to 0. The "reverse" of this action is transition.fadeIn() .
+淡出显示对象，并返回 CCAction 动作对象。
 
-### Parameters:
+fadeOut 操作会首先将对象的透明度设置为 255（100%，完全不透明），然后再逐步减少为 0（0%，完全透明）。
 
--   CCNode **target**
+如果不希望改变对象当前的透明度，应该用 fadeTo()。 
 
--   table **args**
+~~~ lua
+
+action = transition.fadeOut(sprite, {time = 1.5})
+
+~~~
+
+@param CCNode target 显示对象
+@param table args 参数表格对象
+
+@return mixed 结果
 
 ]]
 function transition.fadeOut(target, args)
     assert(not tolua.isnull(target), "transition.fadeOut() - target is not CCNode")
     local action = CCFadeOut:create(args.time)
-    target:setOpacity(255)
     return transition.execute(target, action, args)
 end
 
 --[[--
 
-Fades an sprite. It modifies the opacity from the current value to a custom one.
+将显示对象的透明度改变为指定值，并返回 CCAction 动作对象。 
 
-### Example:
+~~~ lua
 
-    transition.fadeTo(sprite, {time = 2.0, opacity = 200})
+-- 不管显示对象当前的透明度是多少，最终设置为 128
+transition.fadeTo(sprite, {opacity = 128, time = 1.5})
 
-### Parameters:
+~~~
 
--   CCNode **target**
+@param CCNode target 显示对象
+@param table args 参数表格对象
 
--   table **args**
+@return mixed 结果
 
 ]]
 function transition.fadeTo(target, args)
     assert(not tolua.isnull(target), "transition.fadeTo() - target is not CCNode")
-    local opacity = toint(args.opacity)
+    local opacity = checkint(args.opacity)
     if opacity < 0 then
         opacity = 0
     elseif opacity > 255 then
@@ -282,65 +334,66 @@ end
 
 --[[--
 
-Scales a sprite to a zoom factor by modifying it's scale attribute.
+将显示对象缩放到指定比例，并返回 CCAction 动作对象。
 
-### Example:
+~~~ lua
 
-    transition.scaleTo(sprite1, {time = 2.0, scale = 2.0})      -- zoom sprite
-    transition.scaleTo(sprite2, {time = 2.0, scaleX = 2.0})     -- zoom horizontal
-    transition.scaleTo(sprite3, {time = 2.0, scaleY = 2.0})     -- zoom vertical
+-- 整体缩放为 50%
+transition.scaleTo(sprite, {scale = 0.5, time = 1.5})
+-- 单独水平缩放
+transition.scaleTo(sprite, {scaleX = 0.5, time = 1.5})
+-- 单独垂直缩放
+transition.scaleTo(sprite, {scaleY = 0.5, time = 1.5})
 
-### Parameters:
+~~~
 
--   CCNode **target**
+@param CCNode target 显示对象
+@param table args 参数表格对象
 
--   table **args**
+@return mixed 结果
 
 ]]
 function transition.scaleTo(target, args)
     assert(not tolua.isnull(target), "transition.scaleTo() - target is not CCNode")
     local action
     if args.scale then
-        action = CCScaleTo:create(tonumber(args.time), tonumber(args.scale))
+        action = CCScaleTo:create(checknumber(args.time), checknumber(args.scale))
     elseif args.scaleX or args.scaleY then
         local scaleX, scaleY
         if args.scaleX then
-            scaleX = tonumber(args.scaleX)
+            scaleX = checknumber(args.scaleX)
         else
             scaleX = target:getScaleX()
         end
         if args.scaleY then
-            scaleY = tonumber(args.scaleY)
+            scaleY = checknumber(args.scaleY)
         else
             scaleY = target:getScaleY()
         end
-        action = CCScaleTo:create(tonumber(args.time), scaleX, scaleY)
+        action = CCScaleTo:create(checknumber(args.time), scaleX, scaleY)
     end
     return transition.execute(target, action, args)
 end
 
 --[[--
 
-Create an array of sequenceable actions given an table.
+创建一个动作序列对象。
 
-### Example:
+~~~ lua
 
-    local function onComplete()
-        echo("SEQUENCE COMPLETED")
-    end
+local sequence = transition.sequence({
+    CCMoveTo:create(0.5, CCPoint(display.cx, display.cy)),
+    CCFadeOut:create(0.2),
+    CCDelayTime:create(0.5),
+    CCFadeIn:create(0.3),
+})
+sprite:runAction(sequence)
 
-    local action = transition.sequence({
-        CCMoveBy:create(sprite, ccp(100, 0)),   -- moving right
-        CCDelayTime:create(1.0),                -- delay 1 seconds
-        CCMoveBy:create(sprite, ccp(0, 100)),   -- moving up
-        CCCallFunc:create(onComplete),          -- call function
-    })
+~~~
 
-    sprite:runAction(action)
+@param table args 动作的表格对象
 
-### Parameters:
-
--   table **actions**
+@return CCSequence 动作序列对象
 
 ]]
 function transition.sequence(actions)
@@ -356,6 +409,49 @@ end
 
 --[[--
 
+在显示对象上播放一次动画，并返回 CCAction 动作对象。 
+
+~~~ lua
+
+local frames = display.newFrames("Walk%04d.png", 1, 20)
+local animation = display.newAnimation(frames, 0.5 / 20) -- 0.5s play 20 frames
+transition.playAnimationOnce(sprite, animation)
+
+~~~
+
+还可以用 CCSprite 对象的 playAnimationOnce() 方法来直接播放动画：
+
+~~~ lua
+
+local frames = display.newFrames("Walk%04d.png", 1, 20)
+local animation = display.newAnimation(frames, 0.5 / 20) -- 0.5s play 20 frames
+sprite:playAnimationOnce(animation)
+
+~~~
+
+playAnimationOnce() 提供了丰富的功能，例如在动画播放完成后就删除用于播放动画的 CCSprite 对象。例如一个爆炸效果： 
+
+~~~ lua
+
+local frames = display.newFrames("Boom%04d.png", 1, 8)
+local boom = display.newSprite(frames[1])
+ 
+-- playAnimationOnce() 第二个参数为 true 表示动画播放完后删除 boom 这个 CCSprite 对象
+-- 这样爆炸动画播放完毕，就自动清理了不需要的显示对象
+boom:playAnimationOnce(display.newAnimation(frames, 0.3/ 8), true)
+
+~~~
+
+此外，playAnimationOnce() 还允许在动画播放完成后执行一个指定的函数，以及播放动画前等待一段时间。合理运用这些功能，可以大大简化我们的游戏代码。 
+
+@param CCNode target 显示对象
+@param CCNode animation 动作对象
+@param boolean removeWhenFinished 播放完成后删除显示对象
+@param function onComplete 播放完成后要执行的函数
+@param number delay 播放前等待的时间
+
+@return table 动作表格对象
+
 ]]
 function transition.playAnimationOnce(target, animation, removeWhenFinished, onComplete, delay)
     local actions = {}
@@ -365,7 +461,7 @@ function transition.playAnimationOnce(target, animation, removeWhenFinished, onC
         actions[#actions + 1] = CCShow:create()
     end
 
-    actions[#actions + 1] = display.newAnimate(animation)
+    actions[#actions + 1] = CCAnimate:create(animation)
 
     if removeWhenFinished then
         actions[#actions + 1] = CCRemoveSelf:create()
@@ -384,11 +480,27 @@ function transition.playAnimationOnce(target, animation, removeWhenFinished, onC
     return action
 end
 
---[[--
+--[[
+
+在显示对象上循环播放动画，并返回 CCAction 动作对象。
+
+~~~ lua
+
+local frames = display.newFrames("Walk%04d.png", 1, 20)
+local animation = display.newAnimation(frames, 0.5 / 20) -- 0.5s play 20 frames
+sprite:playAnimationForever(animation)
+
+~~~
+
+@param CCNode target 显示对象
+@param CCNode animation 动作对象
+@param number delay 播放前等待的时间
+
+@return table 动作表格对象
 
 ]]
 function transition.playAnimationForever(target, animation, delay)
-    local animate = display.newAnimate(animation)
+    local animate = CCAnimate:create(animation)
     local action
     if type(delay) == "number" and delay > 0 then
         target:setVisible(false)
@@ -405,19 +517,20 @@ function transition.playAnimationForever(target, animation, delay)
     return action
 end
 
---[[--
+--[[
 
-Stop the action.
+停止一个正在执行的动作
 
-### Example:
+~~~ lua
 
-    local action = transition.moveTo(sprite, {time = 2.0, x = 100, y = 100})
-    ....
-    transition.removeAction(action) -- stop moving
+-- 开始移动
+local action = transition.moveTo(sprite, {time = 2.0, x = 100, y = 100})
+....
+transition.removeAction(action) -- 停止移动
 
-### Parameters:
+~~~
 
--   CCAction **action**
+@param mixed target
 
 ]]
 function transition.removeAction(action)
@@ -426,21 +539,23 @@ function transition.removeAction(action)
     end
 end
 
---[[--
+--[[
 
-Stop all actions for the target.
+停止一个显示对象上所有正在执行的动作
 
-### Example:
+~~~ lua
 
-    transition.moveTo(sprite, {time = 2.0, x = 100, y = 100})
-    transition.fadeOut(sprite, {time = 2.0})
-    ....
-    transition.stopTarget(sprite) -- stop moving, stop fades
+-- 开始移动
+transition.moveTo(sprite, {time = 2.0, x = 100, y = 100})
+transition.fadeOut(sprite, {time = 2.0})
+....
+transition.stopTarget(sprite)
 
+~~~
 
-### Parameters:
+注意:显示对象的 performWithDelay() 方法是用动作来实现延时回调操作的，所以如果停止显示对象上的所有动作，会清除该对象上的延时回调操作。 
 
--   CCNode **target**
+@param mixed target
 
 ]]
 function transition.stopTarget(target)
@@ -449,13 +564,11 @@ function transition.stopTarget(target)
     end
 end
 
---[[--
+--[[
 
-Pauses the target, all running actions and newly added actions will be paused.
+暂停显示对象上所有正在执行的动作
 
-### Parameters:
-
--   CCNode **target**
+@param mixed target
 
 ]]
 function transition.pauseTarget(target)
@@ -464,13 +577,11 @@ function transition.pauseTarget(target)
     end
 end
 
---[[--
+--[[
 
-Resumes the target.
+恢复显示对象上所有暂停的动作
 
-### Parameters:
-
--   CCNode **target**
+@param mixed target
 
 ]]
 function transition.resumeTarget(target)

@@ -35,6 +35,7 @@ THE SOFTWARE.
 #include "shaders/ccGLStateCache.h"
 #include <ctype.h>
 #include <cctype>
+#include "apptools/HelperFunc.h"
 
 NS_CC_BEGIN
 
@@ -546,7 +547,7 @@ bool CCTexturePVR::createGLTexture()
         glPixelStorei(GL_UNPACK_ALIGNMENT,1);
         
         glGenTextures(1, &m_uName);
-        glBindTexture(GL_TEXTURE_2D, m_uName);
+        ccGLBindTexture2D(m_uName);
         
         // Default: Anti alias.
 		if (m_uNumberOfMipmaps == 1)
@@ -632,7 +633,8 @@ bool CCTexturePVR::initWithContentsOfFile(const char* path)
     }
     else
     {
-        pvrdata = CCFileUtils::sharedFileUtils()->getFileData(path, "rb", (unsigned long *)(&pvrlen));
+        //pvrdata = CCFileUtils::sharedFileUtils()->getFileData(path, "rb", (unsigned long *)(&pvrlen));
+        pvrdata = CZHelperFunc::getFileData(path, "rb", (unsigned long *)(&pvrlen));
     }
     
     if (pvrlen < 0)

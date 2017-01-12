@@ -57,9 +57,20 @@ NS_CC_BEGIN
 class CC_DLL CCLabelTTF : public CCSprite, public CCLabelProtocol
 {
 public:
+    /**
+     *  @js ctor
+     */
     CCLabelTTF();
+    /**
+     *  @js NA
+     *  @lua NA
+     */
     virtual ~CCLabelTTF();
-    const char* description();    
+    /**
+     *  @js NA
+     *  @lua NA
+     */
+    const char* description();
     
     /** creates a CCLabelTTF with a font name and font size in points
      @since v2.0.1
@@ -78,8 +89,14 @@ public:
     static CCLabelTTF * create(const char *string, const char *fontName, float fontSize,
                                const CCSize& dimensions, CCTextAlignment hAlignment, 
                                CCVerticalTextAlignment vAlignment);
-    
-    
+    /** creates a CCLabel from a fontname, alignment, dimension in points and font size in points, strokeColor and strokeSize in points
+     @since v2.2.6
+     */
+    static CCLabelTTF * create(const char *string, const char *fontName, float fontSize,
+                               const CCSize& dimensions, CCTextAlignment hAlignment,
+                               CCVerticalTextAlignment vAlignment,
+                               const ccColor3B &strokeColor,float strokeSize);
+  
     /** Create a lable with string and a font definition*/
     static CCLabelTTF * createWithFontDefinition(const char *string, ccFontDefinition &textDefinition);
     
@@ -150,6 +167,9 @@ public:
     
     const char* getFontName();
     void setFontName(const char *fontName);
+    
+    virtual const ccColor3B& getColor(void);
+    virtual void setColor(const ccColor3B& color);
     
 private:
     bool updateTexture();

@@ -62,10 +62,13 @@ CCTextureAtlas::~CCTextureAtlas()
 
 #if CC_TEXTURE_ATLAS_USE_VAO
     glDeleteVertexArrays(1, &m_uVAOname);
+    ccGLBindVAO(0);
 #endif
     CC_SAFE_RELEASE(m_pTexture);
-    
-    CCNotificationCenter::sharedNotificationCenter()->removeObserver(this, EVNET_COME_TO_FOREGROUND);
+
+#if CC_ENABLE_CACHE_TEXTURE_DATA
+    CCNotificationCenter::sharedNotificationCenter()->removeObserver(this, EVENT_COME_TO_FOREGROUND);
+#endif
 }
 
 unsigned int CCTextureAtlas::getTotalQuads()
@@ -174,13 +177,15 @@ bool CCTextureAtlas::initWithTexture(CCTexture2D *texture, unsigned int capacity
 
     memset( m_pQuads, 0, m_uCapacity * sizeof(ccV3F_C4B_T2F_Quad) );
     memset( m_pIndices, 0, m_uCapacity * 6 * sizeof(GLushort) );
-    
+
+#if CC_ENABLE_CACHE_TEXTURE_DATA
     // listen the event when app go to background
     CCNotificationCenter::sharedNotificationCenter()->addObserver(this,
                                                            callfuncO_selector(CCTextureAtlas::listenBackToForeground),
-                                                           EVNET_COME_TO_FOREGROUND,
+                                                           EVENT_COME_TO_FOREGROUND,
                                                            NULL);
-
+#endif
+    
     this->setupIndices();
 
 #if CC_TEXTURE_ATLAS_USE_VAO
@@ -609,9 +614,9 @@ void CCTextureAtlas::drawNumberOfQuads(unsigned int n, unsigned int start)
         //		glBufferData(GL_ARRAY_BUFFER, sizeof(quads_[0]) * (n-start), &quads_[start], GL_DYNAMIC_DRAW);
 		
 		// option 3: orphaning + glMapBuffer
-		glBufferData(GL_ARRAY_BUFFER, sizeof(m_pQuads[0]) * (n-start), NULL, GL_DYNAMIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(m_pQuads[0]) * getTotalQuads(), NULL, GL_DYNAMIC_DRAW);
 		void *buf = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-		memcpy(buf, m_pQuads, sizeof(m_pQuads[0])* (n-start));
+		memcpy(buf, m_pQuads, sizeof(m_pQuads[0])* getTotalQuads());
 		glUnmapBuffer(GL_ARRAY_BUFFER);
 		
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
